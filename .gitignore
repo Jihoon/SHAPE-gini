@@ -1,0 +1,8 @@
+
+*.Rproj
+
+.Rproj.user/
+
+*.png
+
+Data/WDI - API_NY.GNP.PCAP.CD_DS2_en_excel_v2_2708456.xls
