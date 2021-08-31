@@ -5,7 +5,11 @@ library(units)
 library(WDI)
 library(scales)
 
-data.path =  "./data/"
+library(here)
+try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
+here::i_am("README.md")
+setwd(here())
+data.path =  paste0(here(), "/data/")
 
 # Standard ISO3 for "countries"
 iso3 = setdiff(countrycode::codelist$iso3c, NA)
