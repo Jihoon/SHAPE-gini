@@ -38,7 +38,7 @@ master = gni2020 %>% left_join(fin.con) %>%
   left_join(ppp.conv) %>%
   mutate(hh.exp.pcap.avg.2020 = hh.exp.pcap.KD * ppp.2017.to.2011) %>%# in 2011$ PPP
 
-# Derive step-like thresholds with slopes (based on Elmar's suggestion)
+  # Derive step-like thresholds with slopes (based on Elmar's suggestion)
   rename(gni.2020 = gni) %>% ungroup() %>% select(country, gni.2020, gdp.gni.ratio, iso3c, hh.exp.pcap.avg.2020) %>% right_join(gdp_pcap, by="iso3c") %>%
 
   mutate(GNI.bil = GDP.bil / gdp.gni.ratio) %>%
@@ -82,14 +82,15 @@ traj = df %>% select(-c(hh.exp.pcap.avg.2020, gdp.pcap, inc.grp:max.2020, gdp.pc
   # muate(ln.NPI = exp(ln.NPI * (max(hist$ln.NPL) - min(hist$ln.NPL)) + min(hist$ln.NPL))
   mutate(ln.NPI = predict(model1, newdata=traj, type='response') * 
            (max(hist$ln.NPL) - min(hist$ln.NPL)) + min(hist$ln.NPL)  ) %>%
-  mutate(povline.trend = exp(ln.NPI)) %>%
+  mutate(povline.trend = pmax(1.9, exp(ln.NPI))) %>%
+  group_by(iso3c, Scenario) %>% mutate(povline.trend.tgt = lag(povline.trend)) %>% ungroup() %>%
   
   # Target gini aiming for WB pov lines
   mutate(gini.tgt.povl = gini.baseyr * (hh.exp.pcap.avg.day - povline0) / hh.exp.pcap.avg.day) %>%
   mutate(gini.floor = gini.baseyr * 0.96^(as.numeric(Year) - 2020)) %>% # -4% maximum decrease (Lakner et al.)
   mutate(achieved.povl = (gini.floor < gini.tgt.povl) & (gini.tgt.povl > gini.lbound)) %>% 
   # Target gini aiming for the S-trend curve (arbitrary asymtote (current max))
-  mutate(gini.tgt.trend = gini.baseyr * (hh.exp.pcap.avg.day - povline.trend) / hh.exp.pcap.avg.day) %>%
+  mutate(gini.tgt.trend = gini.baseyr * (hh.exp.pcap.avg.day - povline.trend.tgt) / hh.exp.pcap.avg.day) %>%
   mutate(achieved.trend = (gini.floor < gini.tgt.trend) & (gini.tgt.trend > gini.lbound)) %>% 
   
   mutate(check = (achieved.trend==achieved.povl))
@@ -118,8 +119,8 @@ df.traj = traj %>% left_join(hc0) %>% drop_na(year.achieved) %>% filter(!is.na(g
 # Gini path when on-track
 a = df.traj %>% filter(ontrack>=0) %>% 
   group_by(iso3c, Scenario) %>%
-  mutate(povline.pre = lag(povline.trend), hh.exp.pre = lag(hh.exp.pcap.avg.day)) %>%
-  mutate(scaler = (hh.exp.pcap.avg.day - povline.trend)/(hh.exp.pre - povline.pre) * hh.exp.pre/hh.exp.pcap.avg.day) %>% #gini scaler = k*mu_x/mu_z
+  mutate(povline.pre = lag(povline.trend.tgt), hh.exp.pre = lag(hh.exp.pcap.avg.day)) %>%
+  mutate(scaler = (hh.exp.pcap.avg.day - povline.trend.tgt)/(hh.exp.pre - povline.pre) * hh.exp.pre/hh.exp.pcap.avg.day) %>% #gini scaler = k*mu_x/mu_z
   replace_na(replace = list(scaler = 1)) %>%
   mutate(sc.cumul = cumprod(scaler)) %>%
   mutate(gini.traj = gini.hc0 * sc.cumul)
@@ -128,8 +129,12 @@ a = df.traj %>% filter(ontrack>=0) %>%
 b = df.traj %>% filter(ontrack<=0) %>% #ungroup() %>%
   add_count(iso3c, Scenario) %>%
   group_by(iso3c, Scenario) %>%
-  mutate(gini.traj = seq(first(gini.baseyr), first(gini.hc0), length.out=first(n))) %>%
-  select(-n)
+  # Follow the -4% floor
+  mutate(gini.traj = pmax(gini.floor, gini.hc0)) %>%
+  # Linear interpolation
+  # mutate(gini.traj = seq(first(gini.baseyr), first(gini.hc0), length.out=first(n))) %>%
+  select(-n) %>%
+  filter(ontrack!=0) # throw away the floor gini at ontrack==0
 
 # Combined Gini trajectories
 df.gini = rbind(a, b) %>% arrange(country, Scenario, Year) %>%
@@ -137,7 +142,7 @@ df.gini = rbind(a, b) %>% arrange(country, Scenario, Year) %>%
   unique(.) %>%
   left_join(df.gr %>% select(Scenario:Year, gr.r))
 df.ontrack = df.gini %>% filter(ontrack==0) %>% 
-  select(country:Year, povline.achieved=povline.trend, avg.exp=hh.exp.pcap.avg.day, gini.traj)
+  select(country:Year, povline.achieved=povline.trend.tgt, avg.exp=hh.exp.pcap.avg.day, gini.traj)
 
 # Test plot
 l.size = 1.5
