@@ -75,9 +75,11 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     mutate(povline0 = povline[inc.grp], povline.lower = povline[grp.lower]) %>% # povline0: reference pov line given the GNI
     mutate(povline.adj = pmin((povline0-povline.lower)/(med-min) * (gni.pcap-min) + povline.lower, povline0)) # Pov line with slopes
   
-  poor <- master %>% mutate(year=as.numeric(Year)) %>% group_by(country) %>% filter(any(gdp.pcap<2000 & year==2020)) %>%
+  poor <- master %>% mutate(year=as.numeric(Year)) %>% group_by(country) %>% drop_na(gdp.pcap) %>% filter(any(gdp.pcap<2000 & year==2020)) %>%
     pull(iso3c) %>% unique() %>% sort()
-  rich <- master %>% mutate(year=as.numeric(Year)) %>% group_by(country) %>% filter(any(gdp.pcap>40000 & year==2020)) %>% 
+  medium <- master %>% mutate(year=as.numeric(Year)) %>% group_by(country) %>% drop_na(gdp.pcap) %>% filter(any(gdp.pcap>12500 & gdp.pcap<15000 & year==2020)) %>%
+    pull(iso3c) %>% unique() %>% sort()
+  rich <- master %>% mutate(year=as.numeric(Year)) %>% group_by(country) %>% drop_na(gdp.pcap) %>% filter(any(gdp.pcap>50000 & year==2020)) %>%  
     pull(iso3c) %>% unique() %>% sort()
   
   # Derive avg HH exp projections from GDP trajectories by scenario
@@ -150,8 +152,11 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
   p1 <- traj %>% mutate(year=as.numeric(Year)) %>% filter(year<=2050) %>% group_by(country) %>% 
     mutate(poor.rich=ifelse(iso3c%in%poor, "poor",
                             ifelse(iso3c%in%rich,"rich",
-                                   "medium"))) %>% 
-    filter(poor.rich!="medium") %>% 
+                                   ifelse(iso3c%in%medium,"medium",
+                                          NA)
+                                   ))) %>% 
+    # filter(poor.rich!="medium") %>% 
+    drop_na(poor.rich) %>% 
     ggplot(aes(x=year, colour=country, group=country)) +
     facet_grid(poor.rich~Scenario, scales = "free") +
     geom_line(aes(y=povline.trend.tgt)) +
@@ -167,8 +172,11 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
   p2 <- realised_gini %>% mutate(year=as.numeric(Year)) %>% filter(year<=2050) %>% group_by(country) %>% 
     mutate(poor.rich=ifelse(iso3c%in%poor, "poor",
                             ifelse(iso3c%in%rich,"rich",
-                                   "medium"))) %>% 
-    filter(poor.rich!="medium") %>% 
+                                   ifelse(iso3c%in%medium,"medium",
+                                          NA)
+                            ))) %>% 
+    # filter(poor.rich!="medium") %>% 
+    drop_na(poor.rich) %>% 
     ggplot(aes(x=year, colour=country, group=country)) +
     facet_grid(poor.rich~Scenario, scales = "free") +
     geom_line(aes(y=gini.realised.trend)) +
@@ -184,8 +192,8 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
   ggsave(plot = p,
          filename = paste0(figure.path,"target-",as.character(tgt.str),"_histconstraint-",as.character(hist.str), ".png"),
          width = 30,
-         height = 20,
-         dpi = 400,
+         height = 30,
+         dpi = 300,
          units = "cm") # print 
 }
 
