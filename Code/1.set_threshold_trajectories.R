@@ -54,7 +54,7 @@ df.gr = gdp_pcap %>% mutate(GDP.pcap = GDP.bil/POP.mil) %>% group_by(iso3c, Scen
 create_pathways <- function(g.l.in, g.l.se, g.l.so,
                             dg.l.in, dg.l.se, dg.l.so,
                             lg, lg.y,
-                            tgt.str,hist.str){
+                            tgt.str, hist.str, fit="logistic"){
  
   # Add HH expenditure per capita derived based on the latest share (NE.CON.PRVT.ZS)
   master = gni2020 %>% left_join(fin.con) %>%
@@ -108,13 +108,21 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     mutate(gni.day = gni.pcap/365) %>% select(-gni.pcap)%>%
     mutate(ln.GNI = log(gni.day)) %>%
     ungroup()
+  
+  if (fit=='logistic') {
+    ln.NPI.predict = predict(model1, newdata=GNI.pov.relation, type='response') * 
+      (max(hist$ln.NPL) - min(hist$ln.NPL)) + min(hist$ln.NPL)
+  }
+  else if (fit=='linear') {
+    ln.NPI.predict = predict(model3, newdata=GNI.pov.relation, type='response')
+  }
+  
   # mutate(ln.NPI = predict(model2, newdata=traj, type='response')) %>%
   # muate(ln.NPI = exp(ln.NPI * (max(hist$ln.NPL) - min(hist$ln.NPL)) + min(hist$ln.NPL))
   traj.withgoal <- GNI.pov.relation %>% 
     
     # using the logistic curve fir, derive the poverty line we work with
-    mutate(ln.NPI = predict(model1, newdata=GNI.pov.relation, type='response') * 
-             (max(hist$ln.NPL) - min(hist$ln.NPL)) + min(hist$ln.NPL)  ) %>%
+    mutate(ln.NPI = ln.NPI.predict) %>%
     mutate(povline.trend = pmax(1.9, exp(ln.NPI)))
   traj.withgoal.lagged <- traj.withgoal %>% select(-c(povline.adj)) %>% 
     # now lag the poverty line trend
@@ -190,7 +198,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
   
   p <- p1 / p2
   ggsave(plot = p,
-         filename = paste0(figure.path,"target-",as.character(tgt.str),"_histconstraint-",as.character(hist.str), ".png"),
+         filename = paste0(figure.path,"target-",as.character(tgt.str),"_histconstraint-",as.character(hist.str), "-", fit, ".png"),
          width = 30,
          height = 30,
          dpi = 300,
@@ -222,7 +230,8 @@ for (lg.setting in seq(1,3)){
                     lg=lag.period,
                     lg.y=lag.years.target[lg.setting],
                     tgt.str=gini_boundaries[hist.setting],
-                    hist.str=target_update[lg.setting])
+                    hist.str=target_update[lg.setting],
+                    fit='linear')
     
   }
 }
