@@ -48,6 +48,25 @@ gini.wb = WDI(indicator="SI.POV.GINI", start = 2015, extra=TRUE) %>%
   summarise(gini.baseyr = mean(SI.POV.GINI, na.rm = TRUE)) %>%
   drop_na()
 
+# Alternative baseline Ginis from SSP1
+gini.ssp1 = read.csv("P:/ene.general/DecentLivingEnergy/DLE_scaleup/Data/gdp_gini_pop_ssp.csv") %>%
+  filter(scenario=="SSP1", year==2020) %>% 
+  select(iso3c=country, gini.baseyr=gini)
+
+# MESSAGE regions (R-11)
+reg.MSG = read_xlsx("P:/ene.general/DecentLivingEnergy/DLE_scaleup/Data/iso_region_MESSAGE.xlsx") %>% 
+  rename(iso3c = iso, reg.MSG = "MESSAGE-GLOBIOM") %>% mutate(iso3c = toupper(iso3c)) %>%
+  select(iso3c, reg.MSG)
+
+gini.MSG.median = reg.MSG %>%
+  left_join(gini.ssp1) %>% drop_na() %>%
+  group_by(reg.MSG) %>% summarise(gini.median = median(gini.baseyr))
+
+gini.ssp1 = reg.MSG %>% left_join(gini.ssp1) %>% left_join(gini.MSG.median) %>%
+  mutate(imputed.gini = is.na(gini.baseyr)) %>%
+  mutate(gini.baseyr = coalesce(gini.baseyr, gini.median)) %>%
+  select(-gini.median)
+
 # GDP conversion between 2005$ PPP and 2017$ PPP
 ppp.conv = WDI(indicator = c("PA.NUS.PPP", "NY.GDP.DEFL.ZS"), start = 2005, end=2017, extra=TRUE) %>%
   filter(year %in% c(2005, 2011, 2017), iso3c %in% iso3) %>% 
@@ -94,9 +113,9 @@ ggplot(data = df.test) +
   geom_point(aes(GNI, NPL)) + # Observations
   scale_x_continuous(trans='log', breaks=scales::trans_breaks("log", function(x) 2^x)) +
   scale_y_continuous(trans='log', breaks=scales::trans_breaks("log", function(x) 2^x)) +
-  geom_line(aes(GNI, fit1, color='Logistic'), size=1.5) +
-  geom_line(aes(GNI, fit2, color='Gompertz'), size=1.5) +
-  geom_line(aes(GNI, fit3, color='Linear'), size=1.5) +
+  geom_line(aes(GNI, pmax(1.9, fit1), color='Logistic'), size=1.5) +
+  # geom_line(aes(GNI, fit2, color='Gompertz'), size=1.5) +
+  geom_line(aes(GNI, pmax(1.9, fit3), color='Linear'), size=1.5) +
   theme_bw() +
   labs(x="GNI per capita per day (2011 Atlas USD)", y="National poverty line per day (2011 PPP)")
 
