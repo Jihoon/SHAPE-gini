@@ -24,7 +24,7 @@ figure.path <- paste0(here(), "/figures/")
 target_horizon <- c("5yr","10yr","15yr")
 lag.years.target <- c(5,10,15)
 
-gini_boundaries <- c("strict", "medium", "loose")
+gini_boundaries <- c("tight", "medium", "relaxed")
 gini.lbound.innov <- 26.2 * c(1.1, 1, 0.9)    # 5% percentile
 gini.lbound.serv <- 24.8 * c(1.1, 1, 0.9) # 2% percentile
 gini.lbound.soc <- 24 * c(1.1, 1, 0.9)        # 1% percentile
@@ -127,6 +127,9 @@ df.povline <- GNI.pov.relation %>%
   mutate(ln.NPI = ln.NPI.predict) %>%
   mutate(povline.trend = pmax(1.9, exp(ln.NPI)))
 
+# Sample n countries from each income group not to over-crowd the figure
+sample.cty <- cty.grp %>% group_by(inc.grp) %>% sample_n(10)
+
 
 # Function for deriving Gini trajectory and plotting
 create_pathways <- function(g.l.in, g.l.se, g.l.so,
@@ -175,7 +178,6 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     mutate(gini.realised.trend = ifelse(years.ontrack & Scenario!="innovation", min(gini.realised.trend),
                                                gini.realised.trend))
   
-  sample.cty <- cty.grp %>% group_by(inc.grp) %>% sample_n(10)
   df.p1 <- traj %>% mutate(year=as.numeric(Year)) %>% filter(year<=2050) %>% group_by(country) %>% 
     inner_join(sample.cty)
   
@@ -192,7 +194,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     theme(legend.position = "none")
   
   df.gini.realised <- realised_gini %>% mutate(year=as.numeric(Year)) %>% filter(year<=2050) %>% group_by(country) %>% 
-    right_join(sample.cty)
+    inner_join(sample.cty)
   
   # plot realised gini pathways ====
   p2 <- df.gini.realised %>% 
@@ -203,30 +205,25 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
               aes(x=2055,y=gini.realised.trend, label=country)) +
     # geom_label(data=. %>% filter(!tgt.achieved) %>% distinct(country, .keep_all=T),
     #           aes(x=2020, y=20, label=paste(unique(iso3c), collapse = " ")), hjust = 0) +
-    ggtitle(paste0("Gini trend ",as.character(lg.y), "yr-lagged ", fit)) +
+    ggtitle(paste0("Gini constraint: ", as.character(tgt.str), ", ", as.character(lg.y), "yr-lagged ", fit)) +
     # ylab("Gini") +
     # xlab(NULL) +
     theme(legend.position = "none") +
     labs(y="Gini") #+
-    # annotate("text", x = 2020, y = 20, label = paste("Infeas.:",
-    #                                                  unique(. %>%
-    #                                                           filter(!tgt.achieved) %>%
-    #                                                           distinct(country, .keep_all=T) %>%
-    #                                                           select(iso3c)))
-    #          )
+
   df.infs = realised_gini %>% 
     group_by(iso3c, Scenario) %>% 
     filter(!tgt.achieved) %>%
     slice(1) %>%
-    group_by(Scenario) %>%
+    group_by(Scenario, povline0) %>%
     summarise(txt = paste(iso3c, collapse = " ")) 
 
-  print(paste(g.l.in, g.l.se, g.l.so))
+  print(paste(as.character(tgt.str), ", ", as.character(lg.y), "yr-lagged:", g.l.in, g.l.se, g.l.so))
   print(df.infs)
 
   p <- p1 / p2
   ggsave(plot = p,
-         filename = paste0(figure.path,"gini constraint-",as.character(tgt.str),"_horizon-",as.character(hist.str), "-", fit, ".png"),
+         filename = paste0(figure.path,"gini constraint-", as.character(tgt.str),"_horizon-",as.character(hist.str), "-", fit, ".png"),
          width = 30,
          height = 30,
          dpi = 300,
@@ -236,6 +233,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
 }
 
 list.result = list()
+i <- 1
 # Run the script
 for (lg.setting in seq(1,3)){
   for (hist.setting in seq(1,3)){
@@ -258,19 +256,23 @@ for (lg.setting in seq(1,3)){
                     tgt.str=gini_boundaries[hist.setting],
                     hist.str=target_horizon[lg.setting],
                     fit='linear')
+    list.result[[i]] <- df.gini
+    names(list.result)[i] <- paste0(gini_boundaries[hist.setting], target_horizon[lg.setting], sep = "_")
+    i <- i+1
   }
 }
 
 # Test plot
 l.size = 1.5
 
-cty = "DEU"
-ggplot(data=df.gini %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
+cty = "SRB"
+ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
+  # geom_line(aes(y=gini.floor, group=interaction(country, Scenario), color=Scenario), size=l.size)  +
   geom_line(aes(y=gini.tgt.trend, group=interaction(country, Scenario), color=Scenario), size=l.size)  +
-  # geom_line(data=df.gr %>% filter(iso3c %in% c(cty)), aes(y=gr.r*1000, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) +
-  geom_hline(yintercept=gini.lbound.innov[hist.setting], linetype="dashed", color = "red") +
-  geom_hline(yintercept=gini.lbound.serv[hist.setting], linetype="dashed", color = "green") +
-  geom_hline(yintercept=gini.lbound.soc[hist.setting], linetype="dashed", color = "blue") #+
+  geom_line(data=df.gr %>% filter(iso3c %in% c(cty)), aes(y=gr.r*600, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) +
+  geom_hline(yintercept=gini.lbound.innov[2], linetype="dashed", color = "red") +
+  geom_hline(yintercept=gini.lbound.serv[2], linetype="dashed", color = "green") +
+  geom_hline(yintercept=gini.lbound.soc[2], linetype="dashed", color = "blue") +
   # geom_text(data=df.ontrack %>%
   #             filter(iso3c %in% c(cty),
   #                    Scenario=="innovation"),
@@ -283,16 +285,16 @@ ggplot(data=df.gini %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
   #           aes(x=Year, y=gini.traj,
   #               label=paste0("Avg:", format(hh.exp.pcap.avg.day, digits = 3), "($/day)")),
   #           nudge_y = -2) +
-  # scale_y_continuous(
-  # 
-  #   # Features of the first axis
-  #   name = "Gini",
-  # 
-  #   # Add a second axis and specify its features
-  #   sec.axis = sec_axis(~./1000, name="GDP growth rate")
-  # ) +
-  # labs(title=cty) +
-  # theme_bw()
+  scale_y_continuous(
+
+    # Features of the first axis
+    name = "Gini",
+
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~./600, name="GDP growth rate")
+  ) +
+  labs(title=cty) +
+  theme_bw()
 #   
 # cty = "AUT"
 # ggplot(data=df.gini %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
