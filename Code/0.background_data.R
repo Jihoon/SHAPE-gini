@@ -24,14 +24,14 @@ gni2020 = WDI(indicator =c("NY.GNP.PCAP.CD", # GNI per capita, Atlas method (cur
                            # "NY.GNP.PCAP.KD", # GNI per capita, PPP (constant 2017 international $)
                            
                            "NY.GDP.PCAP.PP.CD", # GDP per capita, PPP (current international $)
-                           "NY.GDP.PCAP.PP.KD"  # GDP per capita, PPP (constant 2017 international $)
-                           # "NE.CON.PRVT.PC.KD"  # GDP per capita, PPP (constant 2017 international $)
+                           "NY.GDP.PCAP.PP.KD",  # GDP per capita, PPP (constant 2017 international $)
+                           "NY.GDP.MKTP.PP.KD"  # GDP, PPP (constant 2017 international $)
                            ), start = 2010, end=2020, extra=TRUE) %>% 
   rename(gni = NY.GNP.PCAP.CD) %>%
   filter(!is.na(iso3c), region!="Aggregates", year %in% c(2019, 2020), !is.na(gni)) %>%  # some countries without 2020 GNI
   select(-c(capital:latitude, lending, iso2c)) %>% arrange(iso3c, -year) %>%
   group_by(country, iso3c) %>%
-  summarise(across(gni:NY.GDP.PCAP.PP.KD, mean)) %>% ungroup() %>%
+  summarise(across(gni:NY.GDP.MKTP.PP.KD, mean)) %>% ungroup() %>%
   
   mutate(inc.grp = cut(gni, breaks=thres, labels=FALSE)) %>% # Numeric poverty lines
   group_by(inc.grp) %>%
