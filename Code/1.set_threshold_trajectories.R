@@ -42,11 +42,12 @@ pop_data = read_delim(paste0(data.path, "release_v1p1/SHAPE_POP_v1p1.mif"), deli
   pivot_longer(cols = `2010`:`2100`, names_to = 'Year', values_to = 'POP.mil') %>% select(-Model, -Scenario, -Variable, -Unit)
 gdp_pcap = gdp_data %>% left_join(pop_data, by = c("Region", "Year")) %>% rename(iso3c=Region) %>%
   left_join(ppp.conv) %>% mutate(GDP.bil = GDP.bil*ppp.2005.to.2017)%>%
-  mutate(gdp.pcap = GDP.bil/POP.mil*1000) 
-
-df.gr = gdp_pcap %>% mutate(GDP.pcap = GDP.bil/POP.mil) %>% group_by(iso3c, Scenario) %>%
-  mutate(GDP.pcap.pre = lag(GDP.pcap)) %>% mutate(gr.r = (GDP.pcap/GDP.pcap.pre)^0.2 -1) %>% # Annual avg GDP growth rate
+  mutate(gdp.pcap = GDP.bil/POP.mil*1000) %>% 
   mutate(Year = as.numeric(Year))
+
+# Annual mean growth rate of countries
+df.gr = gdp_pcap %>% mutate(GDP.pcap = GDP.bil/POP.mil) %>% group_by(iso3c, Scenario) %>%
+  mutate(GDP.pcap.pre = lag(GDP.pcap)) %>% mutate(gr.r = (GDP.pcap/GDP.pcap.pre)^0.2 -1) 
 
 
 
@@ -62,7 +63,8 @@ master = gni2020 %>% left_join(fin.con) %>%
   mutate(hh.exp.pcap.avg.2020 = hh.exp.pcap.KD * ppp.2017.to.2011) %>%# in 2011$ PPP
   
   # Derive step-like thresholds with slopes (based on Elmar's suggestion)
-  rename(gni.2020 = gni) %>% ungroup() %>% select(country, gni.2020, gdp.gni.ratio, iso3c, hh.exp.pcap.avg.2020) %>% right_join(gdp_pcap, by="iso3c") %>%
+  rename(gni.2020 = gni) %>% ungroup() %>% select(country, gni.2020, gdp.gni.ratio, iso3c, hh.exp.pcap.avg.2020) %>% 
+  right_join(gdp_pcap, by="iso3c") %>%
   
   mutate(GNI.bil = GDP.bil / gdp.gni.ratio) %>%
   mutate(gni.pcap = GNI.bil / POP.mil * 1000) %>%
@@ -73,7 +75,8 @@ master = gni2020 %>% left_join(fin.con) %>%
   mutate(grp.lower = pmax(inc.grp-1, 1)) %>% # The group below
   mutate(povline0 = povline[inc.grp], povline.lower = povline[grp.lower]) %>% # povline0: reference pov line given the GNI
   mutate(povline.adj = pmin((povline0-povline.lower)/(med-min) * (gni.pcap-min) + povline.lower, povline0)) %>% # Pov line with slopes
-  mutate(Year=as.numeric(Year)) %>% group_by(country) %>% drop_na(gdp.pcap)
+  # mutate(Year=as.numeric(Year)) %>% 
+  group_by(country) %>% drop_na(gdp.pcap)
 
 # poor <- master %>% filter(any(gdp.pcap<2000 & year==2020)) %>%
 #   pull(iso3c) %>% unique() %>% sort()
@@ -148,6 +151,11 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     ) %>% 
     mutate(povline.trend.tgt=ifelse(is.na(povline.trend.tgt),init.povline,povline.trend.tgt)) %>% select(-init.povline)
   
+  get_floor <- function(base, min, r, yr) {
+    v = pmax(min, base * (1-r)^(yr - 2020))
+    return(v)
+  }
+  
   # add floors related to historical boundaries
   traj <- df.povline.lagged %>% 
     # Target gini aiming for WB pov lines
@@ -159,63 +167,84 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
                                  ifelse(Scenario=="service", dg.l.se, 
                                         ifelse(Scenario=="society", dg.l.so, NA)))) %>%
     # -4% maximum decrease (Lakner et al.) and total equality maximum
-    mutate(gini.floor = pmax(gini.minimum.abs, gini.baseyr * (1-gini.slope)^(as.numeric(Year) - 2020))) %>% 
-    mutate(gini.tgt.trend = gini.baseyr * (hh.exp.pcap.avg.day - povline.trend.tgt) / hh.exp.pcap.avg.day,
-           Year = as.numeric(Year))
-  
+    mutate(gini.floor = get_floor(gini.baseyr, gini.minimum.abs, gini.slope, Year)) %>% 
+    mutate(gini.tgt.trend = gini.baseyr * (hh.exp.pcap.avg.day - povline.trend.tgt) / hh.exp.pcap.avg.day)
+
   # calculate the realised gini changes (trend line) ====
   realised_gini <- traj %>% 
-    select(country, iso3c, Scenario, Year, gini.minimum.abs, gini.slope, gini.tgt.trend, gini.floor, povline.trend.tgt, povline0) %>% 
+    select(country, iso3c, Scenario, Year, gini.baseyr, gini.minimum.abs,
+           gini.slope, gini.tgt.trend, gini.floor, povline.trend.tgt, povline0) %>% 
     mutate(gini.realised.trend = pmax(gini.tgt.trend, gini.floor)) %>% ungroup() %>%
     mutate(years.ontrack= (gini.tgt.trend >= gini.floor)) %>%
     group_by(iso3c, Scenario) %>%
-    mutate(tgt.achieved = last(years.ontrack)) %>%
-    mutate(gini.realised.trend = ifelse(tgt.achieved, gini.realised.trend, NA)) %>% # Not feasible 
-    mutate(gini.achieved.interm = min(gini.realised.trend)) %>%
-    mutate(gini.realised.trend = ifelse(years.ontrack, gini.achieved.interm,
-                                               gini.realised.trend)) 
-  
+    # Whether the absolute tgt is met or not (anytime before 2100)
+    mutate(tgt.achieved = Reduce("|", years.ontrack)) %>% 
+    # Gini traj for those who achieve the target. NA otherwise
+    mutate(gini.realised.trend = ifelse(tgt.achieved, gini.realised.trend, NA)) %>% 
+    # Gini at the point of achievement
+    # mutate(gini.achieved.interm = gini.realised.trend[years.ontrack][1]) %>% 
+    mutate(gini.achieved.interm = min(gini.realised.trend)) %>% 
+    mutate(year.abstgt.achieved = Year[years.ontrack][1]) %>%
+    # Once the abs tgt is achieved, keep it there. (no rebound)
+    # mutate(gini.realised.trend = get_floor(gini.baseyr, gini.achieved.interm, gini.slope, Year)) 
+    mutate(gini.realised.trend = ifelse(years.ontrack, gini.achieved.interm, gini.realised.trend)) 
+                           
   Year.relative.tgt <- 2050
   gini.tgt.rel <- 30
   
-  gini.relative.adj <- realised_gini %>% filter(years.ontrack) %>% slice(1) %>%
-    mutate(year.achievement = Year) %>%
-    # Add abs(): TLS achieves the tgt in 2055 (at gini<30), which reverses the fraction making gini.rate.yearly=(1-gini.slope) < 1.
-    # This makes gini go back up to 30 after the achievement.
-    mutate(gini.rate.yearly = pmax((gini.tgt.rel/gini.realised.trend)^(1/abs(Year.relative.tgt-year.achievement)), 1-gini.slope)) %>%
-    select(iso3c, Scenario, year.achievement, gini.rate.yearly)
+  # Need to adjust the original trj to incorporate the relative tgt
+  # Reach Gini=30 by 2050 (if gini.achieved.interm > 30)
+  realised_gini <- realised_gini %>% 
+    mutate(gini.realised.trend = ifelse(gini.achieved.interm > gini.tgt.rel, 
+                                        get_floor(gini.baseyr, gini.tgt.rel, gini.slope, Year),
+                                        gini.realised.trend)) 
+
   
-  realised_gini = realised_gini %>% left_join(gini.relative.adj) %>% 
-    mutate(gini.realised.trend = ifelse(gini.rate.yearly < 1 & years.ontrack, 
-                                        pmax(gini.tgt.rel, gini.realised.trend*gini.rate.yearly^(Year-year.achievement)), gini.realised.trend)
-           )
- 
-  yr.end.figure <- 2060
-  df.p1 <- traj %>% mutate(year=as.numeric(Year)) %>% filter(year<=yr.end.figure) %>% group_by(country) %>% 
+  # Setting up for figures
+  library(ggrepel)
+  yr.end.figure <- 2060 # Last year in the x-axis
+  df.p1 <- traj %>% filter(Year<=yr.end.figure) %>% group_by(country) %>% 
     inner_join(sample.cty)
   
     # plot poverty line targets ====
-  p1 <- ggplot(data=df.p1, aes(x=year, colour=country, group=country)) +
+  p1 <- ggplot(data=df.p1, aes(x=Year, colour=country, group=country)) +
     facet_grid(inc.grp~Scenario, scales = "free") +
     geom_line(aes(y=povline.trend.tgt)) +
     # geom_line(aes(y=povline0), linetype="dashed") +
-    geom_text(data=. %>% filter(year==2050) %>% distinct(country, .keep_all=T),
-              aes(x=2055,y=povline.trend.tgt, label=country)) +
+    geom_text_repel(data=. %>% filter(Year==2060) %>% distinct(country, .keep_all=T),
+              aes(x=2060, y=povline.trend.tgt, label=iso3c),
+              direction = "y",
+              segment.color = 'grey80',
+              nudge_x = 100,
+              min.segment.length = 0.1,
+              max.overlaps = 15) +
     ggtitle(paste0("Poverty line trend, WB (dashed) vs. ", as.character(lg.y), "yr-lagged ", fit)) +
     ylab("Poverty line") +
     xlab(NULL) +
-    theme(legend.position = "none")
+    theme(legend.position = "none") #+
+    # coord_cartesian(
+    #   xlim = c(min(df.p1$Year), max(df.p1$Year) + 5)
+    # )
   
-  df.gini.realised <- realised_gini %>% mutate(year=as.numeric(Year)) %>% filter(year<=yr.end.figure) %>% group_by(country) %>% 
+  df.gini.realised <- realised_gini %>% 
+    # mutate(year=as.numeric(Year)) %>% 
+    filter(Year<=yr.end.figure) %>% group_by(country) %>% 
     inner_join(sample.cty)
   
   # plot realised gini pathways ====
   p2 <- df.gini.realised %>% 
-    ggplot(aes(x=year, colour=country, group=country)) +
+    ggplot(aes(x=Year, colour=country, group=country)) +
     facet_grid(inc.grp~Scenario, scales = "free") +
     geom_line(aes(y=gini.realised.trend)) +
-    geom_text(data=. %>% filter(year==2050) %>% distinct(country, .keep_all=T),
-              aes(x=2055,y=gini.realised.trend, label=country)) +
+    geom_text_repel(data=. %>% filter(Year==2020) %>% distinct(country, .keep_all=T),
+              aes(x=2020, y=gini.realised.trend, label=iso3c),
+              direction = "y",
+              segment.color = 'grey80',
+              nudge_x = -100,
+              min.segment.length = 0.1,
+              max.overlaps = 15) +
+    geom_point(data=. %>% filter(Year==year.abstgt.achieved) %>% distinct(country, Scenario, .keep_all=T),
+              aes(x=Year, y=gini.realised.trend, colour=country), shape=8) +
     # geom_label(data=. %>% filter(!tgt.achieved) %>% distinct(country, .keep_all=T),
     #           aes(x=2020, y=20, label=paste(unique(iso3c), collapse = " ")), hjust = 0) +
     ggtitle(paste0("Gini constraint: ", as.character(tgt.str), ", ", as.character(lg.y), "yr-lagged ", fit)) +
@@ -240,14 +269,16 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
          width = 30,
          height = 30,
          dpi = 300,
-         units = "cm") # print 
+         units = "cm") 
   
   return(realised_gini)
 }
 
+
+# Run the script ====
 list.result = list()
 i <- 1
-# Run the script
+
 for (lg.setting in seq(1,3)){
   for (hist.setting in seq(1,3)){
     
@@ -275,7 +306,7 @@ for (lg.setting in seq(1,3)){
   }
 }
 
-# Test plot
+# Test plot (individual country)
 l.size = 1.5
 
 cty = "TLS"
@@ -288,13 +319,6 @@ ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Ye
   geom_hline(yintercept=gini.lbound.innov[2], linetype="dashed", color = "red") +
   geom_hline(yintercept=gini.lbound.serv[2], linetype="dashed", color = "green") +
   geom_hline(yintercept=gini.lbound.soc[2], linetype="dashed", color = "blue") +
-  # geom_text(data=list.result[["medium10yr_"]] %>% group_by(country, Scenario, years.ontrack) %>% slice(1) %>% filter(years.ontrack) %>%
-  #             left_join(df %>% select(-povline0)) %>%
-  #             filter(iso3c %in% c(cty),
-  #                    Scenario=="innovation"),
-  #           aes(x=Year, y=gini.realised.trend,
-  #               label=paste0("Avg:", format(hh.exp.pcap.avg.day, digits = 3), ", Min.:", format(povline.trend.tgt, digits = 3), "($/day)")),
-  #           nudge_y = -2) +
   geom_text(data=list.result[["medium10yr_"]] %>% 
               left_join(df %>% select(-povline0)) %>%
               filter(Year==2020, iso3c %in% c(cty),
@@ -313,32 +337,3 @@ ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Ye
   scale_x_continuous(breaks=seq(2020, 2100, 5), minor_breaks=NULL) +
   labs(title=cty) +
   theme_bw()
-#   
-# cty = "AUT"
-# ggplot(data=df.gini %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
-#   geom_line(aes(y=gini.traj, group=interaction(country, Scenario), color=Scenario), size=l.size)  +
-#   geom_line(data=df.gr %>% filter(iso3c %in% c(cty)), aes(y=gr.r*1000, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) + 
-#   geom_hline(yintercept=gini.lbound, linetype="dashed", color = "blue") +
-#   geom_text(data=df.ontrack %>% 
-#               filter(iso3c %in% c(cty),
-#                      Scenario=="innovation"), 
-#             aes(x=Year, y=gini.traj, 
-#                 label=paste0("Avg:", format(avg.exp, digits = 3), ", Min.:", format(povline.achieved, digits = 3), "($/day)")),
-#             nudge_y = -2) +
-#   geom_text(data=df.gini %>% 
-#               filter(Year==2020, iso3c %in% c(cty),
-#                      Scenario=="innovation"), 
-#             aes(x=Year, y=gini.traj, 
-#                 label=paste0("Avg:", format(hh.exp.pcap.avg.day, digits = 3), "($/day)")),
-#             nudge_y = -2) +
-#   scale_y_continuous(
-#     
-#     # Features of the first axis
-#     name = "Gini",
-#     
-#     # Add a second axis and specify its features
-#     sec.axis = sec_axis(~./1000, name="GDP growth rate")
-#   ) +
-#   labs(title=cty) +
-#   theme_bw()
-#   
