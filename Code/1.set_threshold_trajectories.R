@@ -218,7 +218,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
               nudge_x = 100,
               min.segment.length = 0.1,
               max.overlaps = 15) +
-    ggtitle(paste0("Poverty line trend, WB (dashed) vs. ", as.character(lg.y), "yr-lagged ", fit)) +
+    ggtitle(paste0("Poverty line trend, ", as.character(lg.y), "yr-lagged ", fit)) +
     ylab("Poverty line") +
     xlab(NULL) +
     theme(legend.position = "none") #+
@@ -337,3 +337,15 @@ ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Ye
   scale_x_continuous(breaks=seq(2020, 2100, 5), minor_breaks=NULL) +
   labs(title=cty) +
   theme_bw()
+
+
+# Export Gini to IAMC format
+df.export = list.result[["medium10yr_"]] %>% 
+  pivot_wider(id_cols = iso3c:Scenario, values_from = gini.realised.trend, names_from = Year) %>%
+  mutate(Model = "SHAPE_Gini", Unit = NA, Variable = "Gini") %>% 
+  left_join(gini.ssp1 %>% select(iso3c, `Base gini imputed`=imputed.gini, gini.baseyr)) %>%
+  mutate(`2020` = coalesce(`2020`, gini.baseyr)) %>%
+  left_join(fin.con %>% select(iso3c, `Share of final consumption among GDP imputed`=imputed.fin.con.r)) %>%
+  select(Model, Scenario, Region=iso3c, Variable, Unit, everything(), -gini.baseyr) #%>%
+
+write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',')

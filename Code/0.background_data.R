@@ -24,7 +24,7 @@ gni2020 = WDI(indicator =c("NY.GNP.PCAP.CD", # GNI per capita, Atlas method (cur
                            # "NY.GNP.PCAP.KD", # GNI per capita, PPP (constant 2017 international $)
                            
                            "NY.GDP.PCAP.PP.CD", # GDP per capita, PPP (current international $)
-                           "NY.GDP.PCAP.PP.KD",  # GDP per capita, PPP (constant 2017 international $)
+                           "NY.GDP.PCAP.PP.KD", # GDP per capita, PPP (constant 2017 international $)
                            "NY.GDP.MKTP.PP.KD"  # GDP, PPP (constant 2017 international $)
                            ), start = 2010, end=2020, extra=TRUE) %>% 
   rename(gni = NY.GNP.PCAP.CD) %>%
@@ -83,6 +83,14 @@ fin.con = WDI(indicator ="NE.CON.PRVT.ZS", latest=1, extra=TRUE) %>%
   filter(!is.na(iso3c), region!="Aggregates", year > 2000) %>% 
   select(-c(capital:latitude, lending, iso2c)) %>% arrange(iso3c, -year) %>%
   select(iso3c, final.cons.rate)
+
+fin.con.median = fin.con %>% right_join(reg.MSG) %>% drop_na() %>%
+  group_by(reg.MSG) %>% summarise(final.cons.MSG.median = median(final.cons.rate))
+  
+fin.con = reg.MSG %>% left_join(fin.con) %>% left_join(fin.con.median) %>%
+  mutate(imputed.fin.con.r = is.na(final.cons.rate)) %>%
+  mutate(final.cons.rate = coalesce(final.cons.rate, final.cons.MSG.median)) %>%
+  select(-final.cons.MSG.median)
 
 # Passthrough rate taken from Lakner et al. 2019
 passthrough = 0.83
