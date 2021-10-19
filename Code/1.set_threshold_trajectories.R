@@ -25,14 +25,17 @@ target_horizon <- c("5yr","10yr","15yr")
 lag.years.target <- c(5,10,15)
 
 gini_boundaries <- c("tight", "medium", "relaxed")
-gini.lbound.innov <- 26.2 * c(1.1, 1, 0.9)    # 5% percentile
+gini.lbound.innov <- 26.2 * c(1.1, 1, 0.9)    # 5% percentile (directly from pcn)
 gini.lbound.serv <- 24.8 * c(1.1, 1, 0.9) # 2% percentile
 gini.lbound.soc <- 24 * c(1.1, 1, 0.9)        # 1% percentile
 # dgini is -2.1% ~ 1.6%/year for 80% of observation (for 5yr spells)
 # dgini is -2.8% ~ 2.1%/year for 90% of observation (for 5yr spells)
-dgini.lbound.innov <- 0.022 * c(0.9, 1, 1.1)
-dgini.lbound.serv <- 0.03 * c(0.9, 1, 1.1)
-dgini.lbound.soc <- 0.034 * c(0.9, 1, 1.1)
+dgini.lbound.innov <- 0.0176 * c(0.9, 1, 1.1)  #(for >=10yr spells)
+dgini.lbound.serv <- 0.0214 * c(0.9, 1, 1.1)
+dgini.lbound.soc <- 0.0248 * c(0.9, 1, 1.1)
+# dgini.lbound.innov <- 0.022 * c(0.9, 1, 1.1)  #(for >=5yr spells)
+# dgini.lbound.serv <- 0.03 * c(0.9, 1, 1.1)
+# dgini.lbound.soc <- 0.034 * c(0.9, 1, 1.1)
 
 # Read in PIK data on GDP and population, and derive GDP/cap
 # Convert 2005$ PPP to 2017$ PPP (as in WDI)
@@ -180,7 +183,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     # Whether the absolute tgt is met or not (anytime before 2100)
     mutate(tgt.achieved = Reduce("|", years.ontrack)) %>% 
     # Gini traj for those who achieve the target. NA otherwise
-    mutate(gini.realised.trend = ifelse(tgt.achieved, gini.realised.trend, NA)) %>% 
+    # mutate(gini.realised.trend = ifelse(tgt.achieved, gini.realised.trend, NA)) %>%  # We keep the trajectory for those with non-achievemen (and save the flag)
     # Gini at the point of achievement
     # mutate(gini.achieved.interm = gini.realised.trend[years.ontrack][1]) %>% 
     mutate(gini.achieved.interm = min(gini.realised.trend)) %>% 
@@ -265,7 +268,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
 
   p <- p1 / p2
   ggsave(plot = p,
-         filename = paste0(figure.path,"gini constraint-", as.character(tgt.str),"_horizon-",as.character(hist.str), "-", fit, ".png"),
+         filename = paste0(figure.path,"gini constraint-", as.character(tgt.str),"_horizon-",as.character(hist.str), "-", fit, "_slower.png"),
          width = 30,
          height = 30,
          dpi = 300,
@@ -309,7 +312,7 @@ for (lg.setting in seq(1,3)){
 # Test plot (individual country)
 l.size = 1.5
 
-cty = "TLS"
+cty = "UKR"
 ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
   geom_line(aes(y=gini.floor, group=interaction(country, Scenario), color=Scenario), size=l.size*0.5)  +
   geom_line(aes(y=gini.tgt.trend, group=interaction(country, Scenario), color=Scenario), size=l.size*0.3)  +
@@ -341,11 +344,12 @@ ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Ye
 
 # Export Gini to IAMC format
 df.export = list.result[["medium10yr_"]] %>% 
-  pivot_wider(id_cols = iso3c:Scenario, values_from = gini.realised.trend, names_from = Year) %>%
+  pivot_wider(id_cols = c(iso3c:Scenario, tgt.achieved), values_from = gini.realised.trend, names_from = Year) %>%
   mutate(Model = "SHAPE_Gini", Unit = NA, Variable = "Gini") %>% 
   left_join(gini.ssp1 %>% select(iso3c, `Base gini imputed`=imputed.gini, gini.baseyr)) %>%
   mutate(`2020` = coalesce(`2020`, gini.baseyr)) %>%
   left_join(fin.con %>% select(iso3c, `Share of final consumption among GDP imputed`=imputed.fin.con.r)) %>%
-  select(Model, Scenario, Region=iso3c, Variable, Unit, everything(), -gini.baseyr) #%>%
+  select(Model, Scenario, Region=iso3c, Variable, Unit, `2020`:`2100`, everything(), `Absolute target achieved`=tgt.achieved, -gini.baseyr) #%>%
 
-write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',')
+# write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',') # for >=5 year spells
+write_delim(df.export, file="SHAPE_Gini_v1p0_slower.csv", delim=',') # for >=10 year spells
