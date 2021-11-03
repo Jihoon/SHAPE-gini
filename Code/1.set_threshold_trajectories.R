@@ -81,13 +81,6 @@ master = gni2020 %>% left_join(fin.con) %>%
   # mutate(Year=as.numeric(Year)) %>% 
   group_by(country) %>% drop_na(gdp.pcap)
 
-# poor <- master %>% filter(any(gdp.pcap<2000 & year==2020)) %>%
-#   pull(iso3c) %>% unique() %>% sort()
-# medium <- master %>% filter(any(gdp.pcap>12500 & gdp.pcap<15000 & year==2020)) %>%
-#   pull(iso3c) %>% unique() %>% sort()
-# rich <- master %>% filter(any(gdp.pcap>50000 & year==2020)) %>%  
-#   pull(iso3c) %>% unique() %>% sort()
-
 cty.grp <- gni2020 %>% select(iso3c, inc.grp) %>% mutate(inc.grp = factor(inc.grp, levels=c(1,2,3,4),labels = c("LIC", "LMIC", "UMIC", "HIC")))
 
 # Derive avg HH exp projections from GDP trajectories by scenario
@@ -213,7 +206,6 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
   p1 <- ggplot(data=df.p1, aes(x=Year, colour=country, group=country)) +
     facet_grid(inc.grp~Scenario, scales = "free") +
     geom_line(aes(y=povline.trend.tgt)) +
-    # geom_line(aes(y=povline0), linetype="dashed") +
     geom_text_repel(data=. %>% filter(Year==2060) %>% distinct(country, .keep_all=T),
               aes(x=2060, y=povline.trend.tgt, label=iso3c),
               direction = "y",
@@ -221,16 +213,12 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
               nudge_x = 100,
               min.segment.length = 0.1,
               max.overlaps = 15) +
-    ggtitle(paste0("Poverty line trend, ", as.character(lg.y), "yr-lagged ", fit)) +
-    ylab("Poverty line") +
+    ggtitle(paste0("Poverty line projections based on GNI development (Minimum threshold targets)")) +
+    ylab("Poverty line (2011$ PPP/day)") +
     xlab(NULL) +
-    theme(legend.position = "none") #+
-    # coord_cartesian(
-    #   xlim = c(min(df.p1$Year), max(df.p1$Year) + 5)
-    # )
+    theme(legend.position = "none") 
   
   df.gini.realised <- realised_gini %>% 
-    # mutate(year=as.numeric(Year)) %>% 
     filter(Year<=yr.end.figure) %>% group_by(country) %>% 
     inner_join(sample.cty)
   
@@ -248,13 +236,9 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
               max.overlaps = 15) +
     geom_point(data=. %>% filter(Year==year.abstgt.achieved) %>% distinct(country, Scenario, .keep_all=T),
               aes(x=Year, y=gini.realised.trend, colour=country), shape=8) +
-    # geom_label(data=. %>% filter(!tgt.achieved) %>% distinct(country, .keep_all=T),
-    #           aes(x=2020, y=20, label=paste(unique(iso3c), collapse = " ")), hjust = 0) +
-    ggtitle(paste0("Gini constraint: ", as.character(tgt.str), ", ", as.character(lg.y), "yr-lagged ", fit)) +
-    # ylab("Gini") +
-    # xlab(NULL) +
+    ggtitle(paste0("Gini trajectories")) +
     theme(legend.position = "none") +
-    labs(y="Gini") #+
+    labs(y="Gini") 
 
   df.infs = realised_gini %>% 
     group_by(iso3c, Scenario) %>% 
@@ -274,6 +258,18 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
          dpi = 300,
          units = "cm") 
   
+  ggsave(plot = p1,
+         filename = paste0(figure.path, "poverty line only.png"),
+         width = 30,
+         height = 15,
+         dpi = 300,
+         units = "cm") 
+  ggsave(plot = p2,
+         filename = paste0(figure.path,"gini only.png"),
+         width = 30,
+         height = 15,
+         dpi = 300,
+         units = "cm") 
   return(realised_gini)
 }
 
@@ -282,8 +278,11 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
 list.result = list()
 i <- 1
 
-for (lg.setting in seq(1,3)){
-  for (hist.setting in seq(1,3)){
+# Limit to one case for the unnecessary parameters (No need for 3 settings..)
+for (lg.setting in 2){
+  for (hist.setting in 2){
+# for (lg.setting in seq(1,3)){
+#   for (hist.setting in seq(1,3)){
     
     initial.ambition.yr <- "2020" # to compensate the lag.
     
@@ -309,7 +308,8 @@ for (lg.setting in seq(1,3)){
   }
 }
 
-# Test plot (individual country)
+
+# Test plot for an individual country for examining the calculation in more detail
 l.size = 1.5
 
 cty = "UKR"
@@ -349,7 +349,7 @@ df.export = list.result[["medium10yr_"]] %>%
   left_join(gini.ssp1 %>% select(iso3c, `Base gini imputed`=imputed.gini, gini.baseyr)) %>%
   mutate(`2020` = coalesce(`2020`, gini.baseyr)) %>%
   left_join(fin.con %>% select(iso3c, `Share of final consumption among GDP imputed`=imputed.fin.con.r)) %>%
-  select(Model, Scenario, Region=iso3c, Variable, Unit, `2020`:`2100`, everything(), `Absolute target achieved`=tgt.achieved, -gini.baseyr) #%>%
+  select(Model, Scenario, Region=iso3c, Variable, Unit, `2020`:`2100`, everything(), `Absolute target achieved`=tgt.achieved, -gini.baseyr) 
 
 # write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',') # for >=5 year spells
 write_delim(df.export, file="SHAPE_Gini_v1p0_slower.csv", delim=',') # for >=10 year spells

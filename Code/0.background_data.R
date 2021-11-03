@@ -103,7 +103,7 @@ hist = read_xlsx(paste0(data.path, "Historical_poverty_lines_WB.xlsx"), skip=5) 
 # Estimate different S-ish models
 model1 <- glm(ln.NPL.normalized ~ ln.GNI, family=binomial(link='logit'), data=hist)
 model2 <- nls(ln.NPL ~ a*exp(-b*exp(- c*ln.GNI)), data=hist, start=list(a=50, b=1, c=3)) # Gomperzt (Sigmoid)
-model3 <- lm(ln.NPL ~ ln.GNI, data=hist) # Gomperzt (Sigmoid)
+model3 <- lm(ln.NPL ~ ln.GNI, data=hist) 
 # model2 <- nls(ln.NPL ~ a/(1 + exp(-b * (ln.GNI-c)) ), data=hist, start=list(a=5, b=1, c=3))
 
 # Fitted curves
