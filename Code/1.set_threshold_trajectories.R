@@ -312,7 +312,7 @@ for (lg.setting in 2){
 # Test plot for an individual country for examining the calculation in more detail
 l.size = 1.5
 
-cty = "UKR"
+cty = "KOR"
 ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
   geom_line(aes(y=gini.floor, group=interaction(country, Scenario), color=Scenario), size=l.size*0.5)  +
   geom_line(aes(y=gini.tgt.trend, group=interaction(country, Scenario), color=Scenario), size=l.size*0.3)  +
@@ -352,4 +352,4 @@ df.export = list.result[["medium10yr_"]] %>%
   select(Model, Scenario, Region=iso3c, Variable, Unit, `2020`:`2100`, everything(), `Absolute target achieved`=tgt.achieved, -gini.baseyr) 
 
 # write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',') # for >=5 year spells
-write_delim(df.export, file="SHAPE_Gini_v1p0_slower.csv", delim=',') # for >=10 year spells
+write_delim(df.export, file="SHAPE_Gini_v1p0_slower_repl.csv", delim=',') # for >=10 year spells
