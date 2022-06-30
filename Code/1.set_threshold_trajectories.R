@@ -39,18 +39,29 @@ dgini.lbound.soc <- 0.0248 * c(0.9, 1, 1.1)
 
 # Read in PIK data on GDP and population, and derive GDP/cap
 # Convert 2005$ PPP to 2017$ PPP (as in WDI)
-gdp_data = read_delim(paste0(data.path, "release_v1p1/SHAPE_GDP_v1p1.mif"), delim=';') %>% select(-X25) %>%
-  pivot_longer(cols = `2010`:`2100`, names_to = 'Year', values_to = 'GDP.bil') %>% select(-Variable, -Unit)
-pop_data = read_delim(paste0(data.path, "release_v1p1/SHAPE_POP_v1p1.mif"), delim=';') %>% select(-X25) %>%
-  pivot_longer(cols = `2010`:`2100`, names_to = 'Year', values_to = 'POP.mil') %>% select(-Model, -Scenario, -Variable, -Unit)
-gdp_pcap = gdp_data %>% left_join(pop_data, by = c("Region", "Year")) %>% rename(iso3c=Region) %>%
+gdp_data = read_delim(paste0(data.path, "release_v1p2/gdp_v1p2.mif"), delim=';') %>% select(-...38) %>%
+  pivot_longer(cols = `2010`:`2100`, names_to = 'Year', values_to = 'GDP.bil') %>% select(-Variable, -Unit) %>%
+  mutate(Year = as.numeric(Year))
+pop_data = read_delim(paste0(data.path, "release_v1p2/population_v1p2.mif"), delim=';') %>% select(-...38) %>%
+  pivot_longer(cols = `2010`:`2100`, names_to = 'Year', values_to = 'POP.mil') %>% select(-Model, -Scenario, -Variable, -Unit)%>%
+  mutate(Year = as.numeric(Year))
+
+library(zoo)
+gdp_annual = gdp_data %>% expand(Region, Year=2010:2100, Scenario) %>% left_join(gdp_data) %>% 
+  arrange(Region, Scenario, Year) %>% mutate(Model = "SHAPE_GDP_POP") %>%
+  # group_by(Region, Scenario) %>%mutate(GDP.bil = na.approx(GDP.bil))
+  group_by(Region, Scenario) %>%mutate(GDP.bil = na.approx(GDP.bil))
+pop_annual = pop_data %>% expand(Region, Year=2010:2100) %>% left_join(pop_data) %>% 
+  arrange(Region, Year) %>% mutate(POP.mil = na.approx(POP.mil))
+
+gdp_pcap = gdp_annual %>% left_join(pop_annual, by = c("Region", "Year")) %>% rename(iso3c=Region) %>%
   left_join(ppp.conv) %>% mutate(GDP.bil = GDP.bil*ppp.2005.to.2017)%>%
   mutate(gdp.pcap = GDP.bil/POP.mil*1000) %>% 
   mutate(Year = as.numeric(Year))
 
 # Annual mean growth rate of countries
 df.gr = gdp_pcap %>% mutate(GDP.pcap = GDP.bil/POP.mil) %>% group_by(iso3c, Scenario) %>%
-  mutate(GDP.pcap.pre = lag(GDP.pcap)) %>% mutate(gr.r = (GDP.pcap/GDP.pcap.pre)^0.2 -1) 
+  mutate(GDP.pcap.pre = lag(GDP.pcap)) %>% mutate(gr.r = (GDP.pcap/GDP.pcap.pre) -1) 
 
 
 
@@ -93,7 +104,8 @@ df = master %>% ungroup() %>%
   mutate(gdp.pcap.pre = lag(gdp.pcap)) %>%
   mutate(gr.gdp = gdp.pcap/gdp.pcap.pre - 1) %>%
   replace_na(replace = list(gr.gdp = 0)) %>%
-  mutate(gr.hh.exp = gr.gdp * passthrough + 1, gr.test = (passthrough*((1+gr.gdp)^0.2-1)+1)^5) %>% # HH expenditure growth rate: The two are close values.
+  mutate(gr.test = passthrough*gr.gdp+1) %>% # HH expenditure growth rate
+  # mutate(gr.hh.exp = gr.gdp * passthrough + 1, gr.test = (passthrough*((1+gr.gdp)^0.2-1)+1)^5) %>% # HH expenditure growth rate: The two are close values.
   mutate(hh.idx = cumprod(gr.test)) %>%
   mutate(hh.exp.pcap.avg = hh.exp.pcap.avg.2020 * hh.idx) %>% # in 2011$ PPP
   mutate(hh.exp.pcap.avg.day = hh.exp.pcap.avg / 365)
@@ -195,6 +207,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
                                         get_floor(gini.baseyr, gini.tgt.rel, gini.slope, Year),
                                         gini.realised.trend)) 
 
+  write.csv(realised_gini, 'realised_gini.csv')
   
   # Setting up for figures
   library(ggrepel)
@@ -286,10 +299,14 @@ for (lg.setting in 2){
     
     initial.ambition.yr <- "2020" # to compensate the lag.
     
-    lag.period <- ifelse(lag.years.target[lg.setting]==10, 2,
-                         ifelse(lag.years.target[lg.setting]==5, 1,
-                                ifelse(lag.years.target[lg.setting]==15, 3,
-                                       NA))) # set lag based on df structure and years lag
+    # lag.period <- ifelse(lag.years.target[lg.setting]==10, 2,
+    #                      ifelse(lag.years.target[lg.setting]==5, 1,
+    #                             ifelse(lag.years.target[lg.setting]==15, 3,
+    #                                    NA))) # set lag based on df structure and years lag
+    
+    # JM removed this lag idea, because JM believes when a country assesses whether it achieved it or not at one point, 
+    # it must be based on their present GDP/GNI and not on the GDP 10 year ago.
+    lag.period <- 0 
     
     df.gini = create_pathways(g.l.in=gini.lbound.innov[hist.setting], 
                     g.l.se=gini.lbound.serv[hist.setting],
@@ -352,4 +369,4 @@ df.export = list.result[["medium10yr_"]] %>%
   select(Model, Scenario, Region=iso3c, Variable, Unit, `2020`:`2100`, everything(), `Absolute target achieved`=tgt.achieved, -gini.baseyr) 
 
 # write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',') # for >=5 year spells
-write_delim(df.export, file="SHAPE_Gini_v1p0_slower_repl.csv", delim=',') # for >=10 year spells
+write_delim(df.export, file="SHAPE_Gini_v1p2_annual.csv", delim=',') # for >=10 year spells
