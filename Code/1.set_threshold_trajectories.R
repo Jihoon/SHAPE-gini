@@ -41,10 +41,13 @@ dgini.lbound.soc <- 0.0248 * c(0.9, 1, 1.1)
 # Convert 2005$ PPP to 2017$ PPP (as in WDI)
 gdp_data = read_delim(paste0(data.path, "release_v1p2/gdp_v1p2.mif"), delim=';') %>% select(-...38) %>%
   pivot_longer(cols = `2010`:`2100`, names_to = 'Year', values_to = 'GDP.bil') %>% select(-Variable, -Unit) %>%
-  mutate(Year = as.numeric(Year))
+  mutate(Year = as.numeric(Year)) %>%
+  mutate(Scenario = ifelse(Scenario=="innovation", "EI",
+                           ifelse(Scenario=="service", "MC",
+                                  "RC")))
 pop_data = read_delim(paste0(data.path, "release_v1p2/population_v1p2.mif"), delim=';') %>% select(-...38) %>%
   pivot_longer(cols = `2010`:`2100`, names_to = 'Year', values_to = 'POP.mil') %>% select(-Model, -Scenario, -Variable, -Unit)%>%
-  mutate(Year = as.numeric(Year))
+  mutate(Year = as.numeric(Year)) 
 
 library(zoo)
 gdp_annual = gdp_data %>% expand(Region, Year=2010:2100, Scenario) %>% left_join(gdp_data) %>% 
@@ -91,6 +94,12 @@ master = gni2020 %>% left_join(fin.con) %>%
   mutate(povline.adj = pmin((povline0-povline.lower)/(med-min) * (gni.pcap-min) + povline.lower, povline0)) %>% # Pov line with slopes
   # mutate(Year=as.numeric(Year)) %>% 
   group_by(country) %>% drop_na(gdp.pcap)
+
+# # Rename the scenarios
+# master = master %>%
+#   mutate(Scenario = ifelse(Scenario=="innovation", "EI",
+#                            ifelse(Scenario=="service", "MC",
+#                                   "RC")))
 
 cty.grp <- gni2020 %>% select(iso3c, inc.grp) %>% mutate(inc.grp = factor(inc.grp, levels=c(1,2,3,4),labels = c("LIC", "LMIC", "UMIC", "HIC")))
 
@@ -142,7 +151,6 @@ df.povline <- GNI.pov.relation %>%
 # Sample n countries from each income group not to over-crowd the figure
 sample.cty <- cty.grp %>% group_by(inc.grp) %>% sample_n(10)
 
-
 # Function for deriving Gini trajectory and plotting
 create_pathways <- function(g.l.in, g.l.se, g.l.so,
                             dg.l.in, dg.l.se, dg.l.so,
@@ -155,9 +163,9 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     group_by(iso3c, Scenario) %>% mutate(povline.trend.tgt = dplyr::lag(povline.trend, n=lg, default = NA)) %>% ungroup() %>%
     # add initial stable poverty line (even though this is normally not used) 
     left_join(
-      df.povline %>% filter(Year==initial.ambition.yr) %>% select(iso3c,Scenario,povline.trend) %>% rename(init.povline=povline.trend)
+      df.povline %>% filter(Year==initial.ambition.yr) %>% select(iso3c, Scenario, povline.trend) %>% rename(init.povline=povline.trend)
     ) %>% 
-    mutate(povline.trend.tgt=ifelse(is.na(povline.trend.tgt),init.povline,povline.trend.tgt)) %>% select(-init.povline)
+    mutate(povline.trend.tgt=ifelse(is.na(povline.trend.tgt), init.povline, povline.trend.tgt)) %>% select(-init.povline)
   
   get_floor <- function(base, min, r, yr) {
     v = pmax(min, base * (1-r)^(yr - 2020))
@@ -168,12 +176,12 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
   traj <- df.povline.lagged %>% 
     # Target gini aiming for WB pov lines
     mutate(gini.tgt.povl = gini.baseyr * (hh.exp.pcap.avg.day - povline0) / hh.exp.pcap.avg.day) %>%
-    mutate(gini.minimum.abs = ifelse(Scenario=="innovation", g.l.in, 
-                                 ifelse(Scenario=="service", g.l.se, 
-                                        ifelse(Scenario=="society", g.l.so, NA)))) %>%
-    mutate(gini.slope = ifelse(Scenario=="innovation", dg.l.in, 
-                                 ifelse(Scenario=="service", dg.l.se, 
-                                        ifelse(Scenario=="society", dg.l.so, NA)))) %>%
+    mutate(gini.minimum.abs = ifelse(Scenario=="EI", g.l.in, 
+                                 ifelse(Scenario=="MC", g.l.se, 
+                                        ifelse(Scenario=="RC", g.l.so, NA)))) %>%
+    mutate(gini.slope = ifelse(Scenario=="EI", dg.l.in, 
+                                 ifelse(Scenario=="MC", dg.l.se, 
+                                        ifelse(Scenario=="RC", dg.l.so, NA)))) %>%
     # -4% maximum decrease (Lakner et al.) and total equality maximum
     mutate(gini.floor = get_floor(gini.baseyr, gini.minimum.abs, gini.slope, Year)) %>% 
     mutate(gini.tgt.trend = gini.baseyr * (hh.exp.pcap.avg.day - povline.trend.tgt) / hh.exp.pcap.avg.day)
@@ -197,6 +205,8 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
     # mutate(gini.realised.trend = get_floor(gini.baseyr, gini.achieved.interm, gini.slope, Year)) 
     mutate(gini.realised.trend = ifelse(years.ontrack, gini.achieved.interm, gini.realised.trend)) 
                            
+  write.csv(realised_gini, 'realised_gini_abs.csv')
+  
   Year.relative.tgt <- 2050
   gini.tgt.rel <- 30
   
@@ -207,7 +217,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
                                         get_floor(gini.baseyr, gini.tgt.rel, gini.slope, Year),
                                         gini.realised.trend)) 
 
-  write.csv(realised_gini, 'realised_gini.csv')
+  # write.csv(realised_gini, 'realised_gini.csv')
   
   # Setting up for figures
   library(ggrepel)
@@ -223,7 +233,7 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
               aes(x=2060, y=povline.trend.tgt, label=iso3c),
               direction = "y",
               segment.color = 'grey80',
-              nudge_x = 100,
+              # nudge_x = 100,
               min.segment.length = 0.1,
               max.overlaps = 15) +
     ggtitle(paste0("Poverty line projections based on GNI development (Minimum threshold targets)")) +
@@ -244,9 +254,10 @@ create_pathways <- function(g.l.in, g.l.se, g.l.so,
               aes(x=2020, y=gini.realised.trend, label=iso3c),
               direction = "y",
               segment.color = 'grey80',
-              nudge_x = -100,
+              # nudge_x = -100,
               min.segment.length = 0.1,
               max.overlaps = 15) +
+    # Mark the point where (pov headcount)=0 is met
     geom_point(data=. %>% filter(Year==year.abstgt.achieved) %>% distinct(country, Scenario, .keep_all=T),
               aes(x=Year, y=gini.realised.trend, colour=country), shape=8) +
     ggtitle(paste0("Gini trajectories")) +
@@ -328,39 +339,64 @@ for (lg.setting in 2){
 
 # Test plot for an individual country for examining the calculation in more detail
 l.size = 1.5
+scale.gdp = 0.3
 
-cty = "KOR"
-ggplot(data=list.result[["medium10yr_"]] %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
-  geom_line(aes(y=gini.floor, group=interaction(country, Scenario), color=Scenario), size=l.size*0.5)  +
+col_EI = "plum4"
+col_MC = "aquamarine3"
+col_RC = "goldenrod1"
+
+scenario_cmap <- c("EI" = col_EI,
+                   "MC" = col_MC,
+                   "RC" = col_RC)
+
+# # Rename the scenarios
+# df.result = list.result[["medium10yr_"]] %>% 
+#   mutate(Scenario = ifelse(Scenario=="innovation", "EI",
+#                            ifelse(Scenario=="service", "MC", 
+#                                   "RC")))
+
+cty = "AFG"
+ggplot(data=df.result %>% filter(iso3c %in% c(cty)), aes(x=Year)) +
+  # geom_line(aes(y=gini.floor, group=interaction(country, Scenario), color=Scenario), size=l.size*0.5)  +
   geom_line(aes(y=gini.tgt.trend, group=interaction(country, Scenario), color=Scenario), size=l.size*0.3)  +
-  geom_line(aes(y=gini.realised.trend, group=interaction(country, Scenario), color=Scenario), size=l.size)  +
-  geom_line(data=df.gr %>% filter(iso3c %in% c(cty)), 
-            aes(y=gr.r*600, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) +
-  geom_hline(yintercept=gini.lbound.innov[2], linetype="dashed", color = "red") +
-  geom_hline(yintercept=gini.lbound.serv[2], linetype="dashed", color = "green") +
-  geom_hline(yintercept=gini.lbound.soc[2], linetype="dashed", color = "blue") +
-  geom_text(data=list.result[["medium10yr_"]] %>% 
+  # geom_line(aes(y=gini.realised.trend, group=interaction(country, Scenario), color=Scenario), size=l.size)  +
+  geom_line(aes(y=povline.trend.tgt/scale.gdp, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) +
+  # geom_line(data=df.gr %>% filter(iso3c %in% c(cty)),
+  #           aes(y=gdp.pcap/scale.gdp/365, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dotted", size=l.size) +
+  # geom_line(data=df.gr %>% filter(iso3c %in% c(cty)), 
+  #           aes(y=gr.r*600, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) +
+  geom_hline(yintercept=gini.lbound.innov[2], linetype="dashed", color = col_EI) +
+  geom_hline(yintercept=gini.lbound.serv[2], linetype="dashed", color = col_RC) +
+  geom_hline(yintercept=gini.lbound.soc[2], linetype="dashed", color = col_MC) +
+  geom_text(data=df.result %>% 
               left_join(df %>% select(-povline0)) %>%
               filter(Year==2020, iso3c %in% c(cty),
-                     Scenario=="innovation"),
-            aes(x=Year, y=gini.floor,
-                label=paste0("Avg:", format(hh.exp.pcap.avg.day, digits = 3), "($/day)")),
-            nudge_y = -2, nudge_x = 1) +
+                     Scenario=="EI"),
+            aes(x=2100, y=hh.exp.pcap.avg.day/scale.gdp,
+                label=paste0("Current mean expenditure/cap:\n", format(hh.exp.pcap.avg.day, digits = 3), "($/day)")),
+            hjust = 1) +
   scale_y_continuous(
 
     # Features of the first axis
     name = "Gini",
+    breaks = seq(0, 50, 10),
 
     # Add a second axis and specify its features
-    sec.axis = sec_axis(~./600, name="GDP growth rate")
+    sec.axis = sec_axis(~.*scale.gdp, name="Expenditure/cap ($/day)", breaks = seq(0,max(df.result$povline.trend.tgt)+1,2))
+    # sec.axis = sec_axis(~.*scale.gdp, name="Daily GDP per capita")
   ) +
   scale_x_continuous(breaks=seq(2020, 2100, 5), minor_breaks=NULL) +
   labs(title=cty) +
-  theme_bw()
+  theme_bw() + 
+  annotate(geom="text", x=2030, y=17, label="Target Gini") +
+  annotate(geom="text", x=2038, y=23, label="Historical Gini minimum") +
+  annotate(geom="text", x=2070, y=18, label="Poverty line ($/day)") +
+  # annotate(geom="text", x=2020, y=34, label="Gini projected", hjust = 0, fontface = "bold") +
+  scale_color_manual(values = c(col_EI, col_MC, col_RC))
 
 
 # Export Gini to IAMC format
-df.export = list.result[["medium10yr_"]] %>% 
+df.export = df.result %>% 
   pivot_wider(id_cols = c(iso3c:Scenario, tgt.achieved), values_from = gini.realised.trend, names_from = Year) %>%
   mutate(Model = "SHAPE_Gini", Unit = NA, Variable = "Gini") %>% 
   left_join(gini.ssp1 %>% select(iso3c, `Base gini imputed`=imputed.gini, gini.baseyr)) %>%
