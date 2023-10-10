@@ -136,7 +136,7 @@ df = master %>% ungroup() %>%
 # Estimate NPI target based on GNI/day
 GNI.pov.relation = df %>% select(
   -c(
-    hh.exp.pcap.avg.2020,
+    # hh.exp.pcap.avg.2020,
     gdp.pcap,
     inc.grp:hh.exp.pcap.avg
   )
@@ -167,7 +167,7 @@ source("./Code/1.1.create_pathways.R")
 
 
 
-# Run the script ====
+# Run the main function  ====
 
 # JM removed this lag idea, because JM believes when a country assesses whether it achieved it or not at one point,
 # it must be based on their present GDP/GNI and not on the GDP 10 year ago.
@@ -182,20 +182,49 @@ df.gini = create_pathways(
   dg.l.so = dgini.lbound.soc
 )
 
+
 # Identify infeasible countries by year ====
 infsb <- list()
-for (tgt in c("2050", "2070", "2100")) { 
+for (tgt in c("2030", "2050", "2070", "2100")) { 
   infsb[[tgt]] = df.gini %>%
     group_by(iso3c, Scenario) %>%
     filter(Year==as.numeric(tgt)) %>% filter(!years.ontrack, inc.grp != "HIC") %>%
-    mutate(k1 = povline.trend.tgt * gini.floor / 
-             (povline.trend.tgt * gini.floor - hh.exp.pcap.avg.day*(gini.floor - gini.tgt.trend))) %>% # Based on own calc
-    mutate(k2 = povline.trend.tgt * gini.floor / hh.exp.pcap.avg.day / (gini.baseyr - gini.floor))  %>%
-    mutate(hh.exp.pcap.avg.day.new = (k1-1)*(hh.exp.pcap.avg.day - povline.trend.tgt) + hh.exp.pcap.avg.day)
+    # mutate(k1 = povline.trend.tgt * gini.floor / 
+    #          (povline.trend.tgt * gini.floor - hh.exp.pcap.avg.day*(gini.floor - gini.tgt.trend))) %>% # Based on own calc
+    # mutate(k2 = povline.trend.tgt * gini.floor / hh.exp.pcap.avg.day.2020 / (gini.baseyr - gini.floor))  %>%
+    # mutate(hh.exp.pcap.avg.day.new1 = (k1-1)*(hh.exp.pcap.avg.day - povline.trend.tgt) + hh.exp.pcap.avg.day) %>%
+    # mutate(hh.exp.pcap.avg.day.new11 = povline.trend.tgt * gini.tgt.trend / (gini.tgt.trend - gini.floor)) %>%
+    mutate(hh.exp.pcap.avg.day.new2 = povline.trend.tgt * gini.baseyr / (gini.baseyr- gini.floor)) %>%
+    left_join(pop_annual) %>%
+    # mutate(GDP_diff1 = (hh.exp.pcap.avg.day.new1 - hh.exp.pcap.avg.day) * POP.mil) %>%
+    # mutate(GDP_diff11 = (hh.exp.pcap.avg.day.new11 - hh.exp.pcap.avg.day) * POP.mil) %>%
+    mutate(GDP_diff2 = (hh.exp.pcap.avg.day.new2 - hh.exp.pcap.avg.day) * POP.mil) # million dollar
 }
 
 View(infsb[["2050"]])
 View(infsb[["2070"]])
+View(infsb[["2100"]])
+
+# Summarize the necessary transfer by scenario
+infsb[["2050"]] %>% 
+  filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") %>% 
+  group_by(Scenario, inc.grp) %>% 
+  summarise(transfer2 = sum(GDP_diff2), n_country = length(unique(iso3c)))
+
+
+make.inf.table <- function(year) {
+  df = infsb[[year]]
+  
+  df.out = df %>%
+    group_by(Scenario, inc.grp) %>%
+    summarise(txt = paste(iso3c, collapse = " "))
+  
+  write.csv(df.out, file=paste0("unmet_countries_", year, ".csv"), row.names = FALSE)
+}
+
+sapply(names(infsb), make.inf.table)
+
+write.csv(infsb[["2050"]])
 # Test plot for an individual country for examining the calculation in more detail ====
 l.size = 1.5
 scale.gdp = 0.3
@@ -213,7 +242,7 @@ scenario_cmap <- c("EI" = col_EI,
                    "SSP2" = col_SSP2)
 
               
-cty = "PRT"
+cty = "AFG"
 ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
   geom_line(aes(
     y = gini.tgt.trend,
@@ -251,8 +280,8 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
              linetype = "dashed",
              color = col_MC) +
   geom_text(
-    data = df.result %>%
-      left_join(df) %>%
+    data = df.gini %>%
+      # left_join(df) %>%
       filter(Year == 2020, iso3c %in% c(cty),
              Scenario == "EI"),
     aes(
@@ -273,7 +302,7 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
     
     # Add a second axis and specify its features
     sec.axis = sec_axis( ~ . * scale.gdp, name = "Poverty line ($/day)", breaks = seq(0, max(
-      df.result$povline.trend.tgt
+      df.gini$povline.trend.tgt
     ) + 1, 2))
     # sec.axis = sec_axis(~.*scale.gdp, name="Daily GDP per capita")
   ) +
@@ -340,8 +369,8 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
              linetype = "dashed",
              color = col_MC) +
   geom_text(
-    data = df.result %>%
-      left_join(df) %>%
+    data = df.gini %>%
+      # left_join(df) %>%
       filter(Year == 2020, iso3c %in% c(cty),
              Scenario == "EI"),
     aes(
@@ -381,7 +410,7 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
 
 
 # Export Gini to IAMC format
-df.export = df.result %>%
+df.export = df.gini %>%
   pivot_wider(
     id_cols = c(iso3c:Scenario, tgt.achieved),
     values_from = gini.realised.trend,
