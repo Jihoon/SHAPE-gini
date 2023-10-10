@@ -63,6 +63,7 @@ create_pathways <- function(g.l.in,
       gini.floor,
       povline.trend.tgt,
       hh.exp.pcap.avg.day,
+      hh.exp.pcap.avg.day.2020,
       inc.grp
       # povline0
     ) %>%

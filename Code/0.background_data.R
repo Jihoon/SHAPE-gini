@@ -60,9 +60,10 @@ gini.wb = WDI(indicator="SI.POV.GINI", start = 2015, extra=TRUE) %>%
 df.ssp = read.csv("P:/ene.general/DecentLivingEnergy/DLE_scaleup/Data/gdp_gini_pop_ssp.csv") %>%
   rename(iso3c=country)
 
-# Alternative baseline Ginis from SSP (For SDP use. this has more countries than the WB source. SS1 by default)
-gini.ssp1 = df.ssp %>%
-  filter(scenario=="SSP1", year==2020) %>% 
+# Alternative base year Ginis from SSP (For SDP use. this has more countries than the WB source. SSP1 by default)
+gini.ssp = df.ssp %>%
+  # filter(year==2020) %>%
+  filter(scenario=="SSP1", year==2020) %>%
   select(iso3c, gini.baseyr=gini) %>%
   full_join(gini.wb %>% rename(gini.baseyr.imp = gini.baseyr)) %>%
   mutate(gini.baseyr = coalesce(gini.baseyr, gini.baseyr.imp)) %>%
