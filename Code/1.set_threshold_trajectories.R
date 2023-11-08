@@ -1,4 +1,5 @@
 library(patchwork)
+library(zoo) # for 'na.approx'
 
 library(here)
 try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
@@ -6,14 +7,6 @@ here::i_am("README.md")
 setwd(here())
 data.path <- paste0(here(), "/data/")
 figure.path <- paste0(here(), "/figures/")
-
-
-#### Income group identification ####
-
-# # Income group characteristics based on 2020 categories
-# groups.2020 <-
-#   gni2020 %>% select(inc.grp, min, med, max) %>% unique()
-# names(groups.2020)[-1] <- paste0(names(groups.2020)[-1] , '.2020')
 
 
 ### Set model parameters ====
@@ -31,7 +24,7 @@ dgini.lbound.serv <- 0.0214
 dgini.lbound.soc <- 0.0248
 
 
-library(zoo)
+
 # Harmonize/reformat gdp/pop data (+ Annualize)
 gdp_annual = gdp_data %>%
   expand(iso3c, Year = 2010:2100, Scenario) %>%
@@ -79,15 +72,7 @@ master = gni2020 %>% left_join(fin.con) %>%
   mutate(gni.pcap = GNI.bil / POP.mil * 1000) %>%
   mutate(inc.grp = cut(gni.2020.atlas, breaks = thres, labels = FALSE)) %>%
   group_by(inc.grp) %>%
-  # mutate(
-  #   min = min(gni.pcap),
-  #   med = median(gni.pcap),
-  #   max = max(gni.pcap)
-  # ) %>%  # min/med/max of the GNI within each group
-  # left_join(groups.2020) %>%
   mutate(grp.lower = pmax(inc.grp - 1, 1)) %>% # The group below
-  # povline0: Original reference pov line given the GNI (WB)
-  # mutate(povline0 = povline[inc.grp]) %>%
   group_by(country) %>% drop_na(gdp.pcap)
 
 
@@ -130,7 +115,7 @@ df = master %>% ungroup() %>%
 
 
 
-#### Derive Gini trajectories ####
+### Derive Gini trajectories ====
 
 
 # Estimate NPI target based on GNI/day
@@ -158,10 +143,6 @@ df.povline <- GNI.pov.relation %>%
   mutate(povline.trend = pmax(pov.lowest, exp(ln.NPI))) %>% # 2011 PPP
   left_join(cty.grp)
   
-# Sample n countries from each income group not to over-crowd the figure
-sample.cty <- cty.grp %>% group_by(inc.grp) %>% sample_n(10) %>% ungroup() %>% select(-c("inc.grp"))
-
-
 # Function definition
 source("./Code/1.1.create_pathways.R")
 
@@ -173,7 +154,7 @@ source("./Code/1.1.create_pathways.R")
 # it must be based on their present GDP/GNI and not on the GDP 10 year ago.
 lag.period <- 0
 
-df.gini = create_pathways(
+l.output = create_pathways(
   g.l.in  = gini.lbound.innov,
   g.l.se  = gini.lbound.serv,
   g.l.so  = gini.lbound.soc,
@@ -182,6 +163,30 @@ df.gini = create_pathways(
   dg.l.so = dgini.lbound.soc
 )
 
+realised_gini = l.output[[2]]
+
+write.csv(realised_gini %>%
+            left_join(gdp_annual %>% select(-Model)) %>% 
+            select(Country=country, iso3c, 
+                   Scenario, Year, 
+                   `GDP pathway` = GDP.bil,
+                   `Gini pathway` = gini.realised.trend,
+                   `Year when target achieved`=year.abstgt.achieved), 
+          'Supplimentary table - Gini_GDP.csv')
+
+# Sample n countries from each income group not to over-crowd the figure
+sample.cty <- realised_gini %>% ungroup() %>% select(iso3c, inc.grp) %>% 
+  unique() %>%
+  group_by(inc.grp) %>% slice_sample(n=7) %>% 
+  ungroup() %>% select(iso3c)
+
+# Make plotss
+plot_povline(l.output[[1]])
+lookup <- c(Year = "year", Scenario = "scenario", gini.ssp = "gini")
+plot_gini(realised_gini, 
+          df.ssp = df.ssp %>% 
+            rename(all_of(lookup)) %>% 
+            select(-pop_mil, -gdp_ppp_2005_bil))
 
 # Identify infeasible countries by year ====
 infsb <- list()
@@ -189,42 +194,55 @@ for (tgt in c("2030", "2050", "2070", "2100")) {
   infsb[[tgt]] = df.gini %>%
     group_by(iso3c, Scenario) %>%
     filter(Year==as.numeric(tgt)) %>% filter(!years.ontrack, inc.grp != "HIC") %>%
-    # mutate(k1 = povline.trend.tgt * gini.floor / 
-    #          (povline.trend.tgt * gini.floor - hh.exp.pcap.avg.day*(gini.floor - gini.tgt.trend))) %>% # Based on own calc
-    # mutate(k2 = povline.trend.tgt * gini.floor / hh.exp.pcap.avg.day.2020 / (gini.baseyr - gini.floor))  %>%
-    # mutate(hh.exp.pcap.avg.day.new1 = (k1-1)*(hh.exp.pcap.avg.day - povline.trend.tgt) + hh.exp.pcap.avg.day) %>%
-    # mutate(hh.exp.pcap.avg.day.new11 = povline.trend.tgt * gini.tgt.trend / (gini.tgt.trend - gini.floor)) %>%
-    mutate(hh.exp.pcap.avg.day.new2 = povline.trend.tgt * gini.baseyr / (gini.baseyr- gini.floor)) %>%
+    mutate(hh.exp.pcap.avg.day.new = povline.trend.tgt * gini.baseyr / (gini.baseyr- gini.floor)) %>%
     left_join(pop_annual) %>%
-    # mutate(GDP_diff1 = (hh.exp.pcap.avg.day.new1 - hh.exp.pcap.avg.day) * POP.mil) %>%
-    # mutate(GDP_diff11 = (hh.exp.pcap.avg.day.new11 - hh.exp.pcap.avg.day) * POP.mil) %>%
-    mutate(GDP_diff2 = (hh.exp.pcap.avg.day.new2 - hh.exp.pcap.avg.day) * POP.mil) # million dollar
+    mutate(GDP_diff = (hh.exp.pcap.avg.day.new - hh.exp.pcap.avg.day) * POP.mil) # million dollar
 }
 
 View(infsb[["2050"]])
 View(infsb[["2070"]])
 View(infsb[["2100"]])
 
-# Summarize the necessary transfer by scenario
-infsb[["2050"]] %>% 
+# Summarize the necessary transfer by scenario ($ mil) ====
+tot.transfer = infsb[["2070"]] %>% 
   filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") %>% 
-  group_by(Scenario, inc.grp) %>% 
-  summarise(transfer2 = sum(GDP_diff2), n_country = length(unique(iso3c)))
+  # group_by(Scenario, inc.grp) %>%
+  # summarise(transfer = sum(GDP_diff), n_country = length(unique(iso3c)))
+  group_by(Scenario) %>%
+  summarise(transfer = sum(GDP_diff))
 
 
 make.inf.table <- function(year) {
   df = infsb[[year]]
+  tot.transfer = df %>% 
+    filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") 
   
   df.out = df %>%
     group_by(Scenario, inc.grp) %>%
-    summarise(txt = paste(iso3c, collapse = " "))
+    summarise(txt = paste(country, collapse = "; ")) %>%
+    left_join(tot.transfer %>% group_by(Scenario, inc.grp) %>%
+                summarise(transfer = sum(GDP_diff))) %>%
+    left_join(tot.transfer %>% 
+                group_by(Scenario) %>%
+                summarise(transfer = sum(GDP_diff)), 
+              by=c("Scenario"), 
+              suffix = c(".inc.grp", ".scen"))
+  
+  names(df.out) = c("Scenario",	"Income group",	
+                    paste("Countries with infeasibility by", year),	
+                    "Total transfer ($ mil.)",	"Scenario total ($ mil.)")
   
   write.csv(df.out, file=paste0("unmet_countries_", year, ".csv"), row.names = FALSE)
+  return(df.out)
 }
 
-sapply(names(infsb), make.inf.table)
+inf.table = lapply(names(infsb), make.inf.table)
+names(inf.table) = names(infsb)
 
-write.csv(infsb[["2050"]])
+inf.table[[1]] %>% left_join()
+
+
+# write.csv(infsb[["2050"]])
 # Test plot for an individual country for examining the calculation in more detail ====
 l.size = 1.5
 scale.gdp = 0.3
@@ -242,7 +260,7 @@ scenario_cmap <- c("EI" = col_EI,
                    "SSP2" = col_SSP2)
 
               
-cty = "AFG"
+cty = "LBY"
 ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
   geom_line(aes(
     y = gini.tgt.trend,
@@ -257,17 +275,13 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
   ),
   size = l.size)  +
   geom_line(aes(y=gini.floor, group=interaction(country, Scenario), color=Scenario), size=l.size*0.5)  +
-  # geom_line(data=df.gr %>% filter(iso3c %in% c(cty)),
-  #           aes(y=gdp.pcap/scale.gdp/365, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dotted", size=l.size) +
-  # geom_line(data=df.gr %>% filter(iso3c %in% c(cty)),
-  #           aes(y=gr.r*600, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) +
   geom_line(
     aes(
       y = povline.trend.tgt / scale.gdp,
       group = interaction(iso3c, Scenario),
-      color = Scenario
+      color = Scenario,
+      linetype = Scenario,
     ),
-    linetype = "dashed",
     size = l.size
   ) +
   geom_hline(yintercept = gini.lbound.innov[2],
@@ -321,12 +335,11 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
            x = 2070,
            y = 18,
            label = "Poverty line ($/day)") +
-  # annotate(geom="text", x=2020, y=34, label="Gini projected", hjust = 0, fontface = "bold") +
-  scale_color_manual(values = c(col_EI, col_MC, col_RC, col_SSP1, col_SSP2))
+  scale_color_manual(values = scenario_cmap)
 
 # Just about Gini (no second axis) ====
 
-ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
+ggplot(data = df.gini %>% filter(iso3c %in% c(cty), Year <= 2070), aes(x = Year)) +
   geom_line(aes(
     y = gini.tgt.trend,
     group = interaction(country, Scenario),
@@ -346,19 +359,6 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
   ),
   linetype = "dashed",
   size = l.size * 0.5)  +
-  # geom_line(data=df.gr %>% filter(iso3c %in% c(cty)),
-  #           aes(y=gdp.pcap/scale.gdp/365, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dotted", size=l.size) +
-  # geom_line(data=df.gr %>% filter(iso3c %in% c(cty)),
-  #           aes(y=gr.r*600, group=interaction(iso3c, Scenario), color=Scenario), linetype = "dashed", size=l.size) +
-  # geom_line(
-  #   aes(
-  #     y = povline.trend.tgt / scale.gdp,
-  #     group = interaction(iso3c, Scenario),
-  #     color = Scenario
-  #   ),
-  #   linetype = "dashed",
-  #   size = l.size
-  # ) +
   geom_hline(yintercept = gini.lbound.innov[2],
              linetype = "dashed",
              color = col_EI) +
@@ -368,44 +368,27 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
   geom_hline(yintercept = gini.lbound.soc[2],
              linetype = "dashed",
              color = col_MC) +
-  geom_text(
-    data = df.gini %>%
-      # left_join(df) %>%
-      filter(Year == 2020, iso3c %in% c(cty),
-             Scenario == "EI"),
-    aes(
-      x = 2100,
-      y = hh.exp.pcap.avg.day / scale.gdp,
-      label = paste0(
-        "Current mean expenditure/cap:\n",
-        format(hh.exp.pcap.avg.day, digits = 3),
-        "($/day)"
-      )
-    ),
-    hjust = 1
-  ) +
   scale_y_continuous(
     # Features of the first axis
     name = "Gini",
     breaks = seq(20, 40, 2)
   ) +
-  scale_x_continuous(breaks = seq(2020, 2100, 10), minor_breaks = NULL) +
+  scale_x_continuous(breaks = seq(2020, 2070, 10), minor_breaks = NULL) +
   labs(title = cty) +
   theme_bw() +
   annotate(geom = "text",
-           x = 2080,
-           y = 31,
-           label = "Aspirational traj.") +
+           x = 2050,
+           y = 29,
+           label = "Desired traj.") +
   annotate(geom = "text",
-           x = 2070,
-           y = 28,
+           x = 2065,
+           y = 27.3,
            label = "Realistic traj.") +
   annotate(geom = "text",
            x = 2060,
-           y = 23,
-           label = "Historical Gini minimum") +
-  # annotate(geom="text", x=2020, y=34, label="Gini projected", hjust = 0, fontface = "bold") +
-  scale_color_manual(values = c(col_EI, col_MC, col_RC))
+           y = 23.7,
+           label = "Historical Gini minimums") +
+  scale_color_manual(values = scenario_cmap)
 
 
 

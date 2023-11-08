@@ -1,16 +1,16 @@
-"Scenario","inc.grp","txt"
-"EI","LIC","AFG BDI LBR NER TJK"
-"EI","LMIC","BGD KIR KGZ FSM SLB TLS UKR VUT ZMB"
-"EI","UMIC","ALB ARM AZE IRQ KAZ LBY MDV MHL MDA MNE SRB TKM TUV"
-"MC","LIC","AFG BDI LBR NER"
-"MC","LMIC","BGD KIR KGZ FSM SLB TLS UKR VUT ZMB"
-"MC","UMIC","ALB AZE KAZ LBY MDV MHL SRB TKM TUV"
-"RC","LIC","AFG BDI LBR NER"
-"RC","LMIC","KIR KGZ FSM SLB TLS UKR VUT ZMB"
-"RC","UMIC","AZE KAZ LBY MDV MHL TKM TUV"
-"SSP1","LIC","AFG BDI CAF COD LBR MLI NER TJK"
-"SSP1","LMIC","BGD COG KIR KGZ FSM SLB TLS UKR VUT ZMB"
-"SSP1","UMIC","ALB ARM AZE IRQ KAZ LBY MDV MHL MDA MNE SRB TKM TUV"
-"SSP2","LIC","AFG BFA BDI CAF TCD COD ETH LBR MLI MOZ NER TJK TZA"
-"SSP2","LMIC","AGO BGD BEN COG KIR KGZ FSM PNG STP SLB TLS UKR VUT ZMB"
-"SSP2","UMIC","ALB ARM AZE GAB IRQ KAZ LBY MDV MHL MDA MNE SRB TKM TUV"
+"Scenario","Income group","Countries with infeasibility by 2050","Total transfer ($ mil.)","Scenario total ($ mil.)"
+"EI","LIC","Afghanistan; Burundi; Liberia; Niger; Tajikistan",606.48295077871,5625.81272515046
+"EI","LMIC","Bangladesh; Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Solomon Islands; Timor-Leste; Ukraine; Vanuatu; Zambia",1309.98574868404,5625.81272515046
+"EI","UMIC","Albania; Armenia; Azerbaijan; Iraq; Kazakhstan; Libya; Maldives; Marshall Islands; Moldova; Montenegro; Serbia; Turkmenistan; Tuvalu",3709.34402568771,5625.81272515046
+"MC","LIC","Afghanistan; Burundi; Liberia; Niger",324.723117012174,1944.5219594423
+"MC","LMIC","Bangladesh; Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Solomon Islands; Timor-Leste; Ukraine; Vanuatu; Zambia",464.285849222581,1944.5219594423
+"MC","UMIC","Albania; Azerbaijan; Kazakhstan; Libya; Maldives; Marshall Islands; Serbia; Turkmenistan; Tuvalu",1155.51299320755,1944.5219594423
+"RC","LIC","Afghanistan; Burundi; Liberia; Niger",194.24744465955,996.733117249058
+"RC","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Solomon Islands; Timor-Leste; Ukraine; Vanuatu; Zambia",144.462055361377,996.733117249058
+"RC","UMIC","Azerbaijan; Kazakhstan; Libya; Maldives; Marshall Islands; Turkmenistan; Tuvalu",658.023617228132,996.733117249058
+"SSP1","LIC","Afghanistan; Burundi; Central African Republic; Congo, Dem. Rep.; Liberia; Mali; Niger; Tajikistan",914.671695444571,6119.14625376726
+"SSP1","LMIC","Bangladesh; Congo, Rep.; Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Solomon Islands; Timor-Leste; Ukraine; Vanuatu; Zambia",1483.11932579275,6119.14625376726
+"SSP1","UMIC","Albania; Armenia; Azerbaijan; Iraq; Kazakhstan; Libya; Maldives; Marshall Islands; Moldova; Montenegro; Serbia; Turkmenistan; Tuvalu",3721.35523252994,6119.14625376726
+"SSP2","LIC","Afghanistan; Burkina Faso; Burundi; Central African Republic; Chad; Congo, Dem. Rep.; Ethiopia; Liberia; Mali; Mozambique; Niger; Tajikistan; Tanzania",2138.62795988383,7811.51626477429
+"SSP2","LMIC","Angola; Bangladesh; Benin; Congo, Rep.; Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Papua New Guinea; Sao Tome and Principe; Solomon Islands; Timor-Leste; Ukraine; Vanuatu; Zambia",1986.27785299603,7811.51626477429
+"SSP2","UMIC","Albania; Armenia; Azerbaijan; Gabon; Iraq; Kazakhstan; Libya; Maldives; Marshall Islands; Moldova; Montenegro; Serbia; Turkmenistan; Tuvalu",3686.61045189444,7811.51626477429

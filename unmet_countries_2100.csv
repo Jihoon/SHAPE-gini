@@ -1,11 +1,11 @@
-"Scenario","inc.grp","txt"
-"EI","LMIC","KIR KGZ FSM TLS UKR"
-"EI","UMIC","ALB AZE KAZ LBY MHL MNE SRB TKM TUV"
-"MC","LMIC","KIR KGZ FSM TLS UKR"
-"MC","UMIC","AZE KAZ LBY MHL TKM TUV"
-"RC","LMIC","KIR KGZ FSM TLS UKR VUT"
-"RC","UMIC","AZE KAZ LBY MHL TKM TUV"
-"SSP1","LMIC","KIR KGZ FSM TLS UKR"
-"SSP1","UMIC","ALB AZE KAZ LBY MHL MNE SRB TKM TUV"
-"SSP2","LMIC","KIR KGZ FSM TLS UKR"
-"SSP2","UMIC","ALB AZE KAZ LBY MHL MDA MNE SRB TKM TUV"
+"Scenario","Income group","Countries with infeasibility by 2100","Total transfer ($ mil.)","Scenario total ($ mil.)"
+"EI","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine",708.300858944684,3704.23648928098
+"EI","UMIC","Albania; Azerbaijan; Kazakhstan; Libya; Marshall Islands; Montenegro; Serbia; Turkmenistan; Tuvalu",2995.93563033629,3704.23648928098
+"MC","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine",117.094315608697,1008.87671401389
+"MC","UMIC","Azerbaijan; Kazakhstan; Libya; Marshall Islands; Turkmenistan; Tuvalu",891.782398405193,1008.87671401389
+"RC","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine; Vanuatu",38.9889316193655,558.530368633668
+"RC","UMIC","Azerbaijan; Kazakhstan; Libya; Marshall Islands; Turkmenistan; Tuvalu",519.541437014303,558.530368633668
+"SSP1","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine",683.60243170187,3680.55705635248
+"SSP1","UMIC","Albania; Azerbaijan; Kazakhstan; Libya; Marshall Islands; Montenegro; Serbia; Turkmenistan; Tuvalu",2996.95462465061,3680.55705635248
+"SSP2","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine",741.680107253417,3915.68751190505
+"SSP2","UMIC","Albania; Azerbaijan; Kazakhstan; Libya; Marshall Islands; Moldova; Montenegro; Serbia; Turkmenistan; Tuvalu",3174.00740465163,3915.68751190505

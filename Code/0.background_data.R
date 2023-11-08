@@ -74,7 +74,7 @@ gini.ssp = df.ssp %>%
 
 # Read in PIK data on GDP and population, and derive GDP/cap (and clean)
 # Convert 2005$ PPP to 2017$ PPP (as in WDI)
-gdp_data = read_delim(paste0(data.path, "release_v1p2_update/SHAPE_GDP_v1p2_withSSPs-Sep2023Update.mif"), 
+gdp_data = read_delim(paste0(data.path, "release_v1p2_update/SHAPE_GDP_v1p2_withSSPs-Sep2023Update_fixssp2HRV.mif"), 
                       delim = ';') %>%
   select(-...25) %>%
   pivot_longer(cols = `2010`:`2100`,
@@ -88,7 +88,7 @@ gdp_data = read_delim(paste0(data.path, "release_v1p2_update/SHAPE_GDP_v1p2_with
     ifelse(Scenario == "service", "MC",
            ifelse(Scenario == "society", "RC", Scenario)
   )))
-pop_data = read_delim(paste0(data.path, "release_v1p2_update/SHAPE_POP_v1p2_withSSPs-Sep2023Update.mif"),
+pop_data = read_delim(paste0(data.path, "release_v1p2_update/SHAPE_POP_v1p2_withSSPs-Sep2023Update_fixssp2CYP.mif"),
                       delim = ';') %>%
   select(-...25) %>%
   rename(iso3c = Region) %>%

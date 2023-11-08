@@ -83,8 +83,7 @@ create_pathways <- function(g.l.in,
     mutate(gini.realised.trend = ifelse(years.ontrack, gini.achieved.interm, gini.realised.trend))
   
   write.csv(realised_gini, 'realised_gini_abs.csv')
-  
-  Year.relative.tgt <- 2050
+
   gini.tgt.rel <- 30
   
   # Need to adjust the original trj to incorporate the relative tgt
@@ -100,6 +99,23 @@ create_pathways <- function(g.l.in,
   
   # write.csv(realised_gini, 'realised_gini.csv')
   
+  df.infs = realised_gini %>%
+    group_by(iso3c, Scenario) %>%
+    filter(!tgt.achieved) %>%
+    slice(1) %>%
+    group_by(Scenario, inc.grp) %>%
+    summarise(txt = paste(iso3c, collapse = " "))
+  
+  print(paste(g.l.in, g.l.se, g.l.so))
+  print(df.infs)
+  
+  return(list(traj, realised_gini))
+}
+
+
+# plot poverty line targets ====
+plot_povline <- function(traj, yr.end.figure = 2070) {
+  
   # Setting up for figures
   library(ggrepel)
   yr.end.figure <- 2060 # Last year in the x-axis
@@ -107,7 +123,6 @@ create_pathways <- function(g.l.in,
     traj %>% filter(Year <= yr.end.figure) %>% group_by(country) %>%
     inner_join(sample.cty)
   
-  # plot poverty line targets ====
   p1 <-
     ggplot(data = df.p1, aes(
       x = Year,
@@ -134,57 +149,6 @@ create_pathways <- function(g.l.in,
     xlab(NULL) +
     theme(legend.position = "none")
   
-  df.gini.realised <- realised_gini %>%
-    filter(Year <= yr.end.figure) %>% group_by(country) %>%
-    inner_join(sample.cty)
-  
-  # plot realised gini pathways ====
-  p2 <- df.gini.realised %>%
-    ggplot(aes(
-      x = Year,
-      colour = country,
-      group = country
-    )) +
-    facet_grid(inc.grp ~ Scenario, scales = "free") +
-    geom_line(aes(y = gini.realised.trend)) +
-    geom_text_repel(
-      data = . %>% filter(Year == 2020) %>% distinct(country, .keep_all = T),
-      aes(x = 2020, y = gini.realised.trend, label = iso3c),
-      direction = "y",
-      segment.color = 'grey80',
-      # nudge_x = -100,
-      min.segment.length = 0.1,
-      max.overlaps = 15
-    ) +
-    # Mark the point where (pov headcount)=0 is met
-    geom_point(
-      data = . %>% filter(Year == year.abstgt.achieved) %>% distinct(country, Scenario, .keep_all =
-                                                                       T),
-      aes(x = Year, y = gini.realised.trend, colour = country),
-      shape = 8
-    ) +
-    ggtitle(paste0("Gini trajectories")) +
-    theme(legend.position = "none") +
-    labs(y = "Gini")
-  
-  df.infs = realised_gini %>%
-    group_by(iso3c, Scenario) %>%
-    filter(!tgt.achieved) %>%
-    slice(1) %>%
-    group_by(Scenario, inc.grp) %>%
-    summarise(txt = paste(iso3c, collapse = " "))
-  
-  print(paste(g.l.in, g.l.se, g.l.so))
-  print(df.infs)
-  
-  # p <- p1 / p2
-  # ggsave(plot = p,
-  #        filename = paste0(figure.path,"gini constraint-", fit, ".png"),
-  #        width = 30,
-  #        height = 30,
-  #        dpi = 300,
-  #        units = "cm")
-  
   ggsave(
     plot = p1,
     filename = paste0(figure.path, "poverty line only.png"),
@@ -193,13 +157,63 @@ create_pathways <- function(g.l.in,
     dpi = 300,
     units = "cm"
   )
+}
+
+
+# plot realised gini pathways ====
+plot_gini <- function(realised_gini, yr.end.figure = 2070, df.ssp) {
+  
+  library(geomtextpath)
+  library(RColorBrewer)
+  
+  df.gini.realised <- realised_gini %>%
+    filter(Year <= yr.end.figure) %>% 
+    group_by(country) %>%
+    inner_join(sample.cty) %>%
+    left_join(df.ssp) %>%
+    group_by(country, Scenario) %>%
+    mutate(gini.ssp = ifelse(Scenario %in% c("SSP1", "SSP2"), na.approx(gini.ssp), gini.ssp)) %>%
+    ungroup() %>% group_by(inc.grp) %>%
+    mutate(col.ind = country %>% as.factor() %>% as.numeric() %>% as.character()) %>% ungroup() 
+  View(df.gini.realised %>% ungroup() %>% count(iso3c, inc.grp))
+  
+  # Set color palette
+  colors = brewer.pal(7, "Dark2")
+  
+  p2 <- df.gini.realised %>%
+    ggplot(aes(x = Year, colour=col.ind, label = iso3c)) +
+    facet_grid(inc.grp ~ Scenario, scales = "free") +
+    geom_vline(xintercept=2030, linetype ="dotdash") +
+    geom_line(aes(y = gini.realised.trend)) +
+    geom_line(aes(y = gini.ssp), linetype="twodash") +
+    geom_text_repel(
+      data = . %>% filter(Year == 2020) %>% distinct(country, .keep_all = T),
+      aes(x = 2030, y = gini.realised.trend, label = iso3c),
+      fontface = "bold",
+      direction = "both",
+      segment.color = 'grey80',
+      # nudge_x = -100,
+      min.segment.length = 0.1,
+      max.overlaps = 10
+    ) +
+    # Mark the point where (pov headcount)=0 is met
+    geom_point(
+      data = . %>% filter(Year == year.abstgt.achieved) %>% distinct(country, Scenario, .keep_all=T),
+      aes(x = Year, y = gini.realised.trend),
+      shape = 8
+    ) +
+    scale_colour_manual(values = colors) +
+    ggtitle(paste0("Gini trajectories")) +
+    theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust=1)) +
+    labs(y = "Gini")
+  
+  print(p2)
   ggsave(
     plot = p2,
     filename = paste0(figure.path, "gini only.png"),
-    width = 30,
-    height = 15,
+    width = 25,
+    height = 21,
     dpi = 300,
     units = "cm"
   )
-  return(realised_gini)
 }

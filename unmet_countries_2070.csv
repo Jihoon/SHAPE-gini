@@ -1,13 +1,13 @@
-Scenario,Income Group,Countries that cannot achieve SDG1 by 2070
-EI,LMIC,KIR KGZ FSM TLS UKR VUT
-EI,UMIC,ALB ARM AZE KAZ LBY MDV MHL MDA MNE SRB TKM TUV
-MC,LMIC,KIR KGZ FSM TLS UKR VUT
-MC,UMIC,AZE KAZ LBY MHL TKM TUV
-RC,LMIC,KIR KGZ FSM TLS UKR VUT
-RC,UMIC,AZE KAZ LBY MDV MHL TKM TUV
-SSP1,LIC,AFG
-SSP1,LMIC,KIR KGZ FSM TLS UKR VUT
-SSP1,UMIC,ALB ARM AZE KAZ LBY MDV MHL MDA MNE SRB TKM TUV
-SSP2,LIC,AFG BDI LBR NER TJK
-SSP2,LMIC,BGD KIR KGZ FSM SLB TLS UKR VUT
-SSP2,UMIC,ALB ARM AZE IRQ KAZ LBY MDV MHL MDA MNE SRB TKM TUV
+"Scenario","Income group","Countries with infeasibility by 2070","Total transfer ($ mil.)","Scenario total ($ mil.)"
+"EI","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine; Vanuatu",737.668405462997,4198.98619018682
+"EI","UMIC","Albania; Armenia; Azerbaijan; Kazakhstan; Libya; Maldives; Marshall Islands; Moldova; Montenegro; Serbia; Turkmenistan; Tuvalu",3461.31778472383,4198.98619018682
+"MC","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine; Vanuatu",207.447701663689,1280.60462506253
+"MC","UMIC","Azerbaijan; Kazakhstan; Libya; Marshall Islands; Turkmenistan; Tuvalu",1073.15692339884,1280.60462506253
+"RC","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine; Vanuatu",90.0989086947327,711.637483211297
+"RC","UMIC","Azerbaijan; Kazakhstan; Libya; Maldives; Marshall Islands; Turkmenistan; Tuvalu",621.538574516564,711.637483211297
+"SSP1","LIC","Afghanistan",43.7493887835956,4205.54765930603
+"SSP1","LMIC","Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Timor-Leste; Ukraine; Vanuatu",696.518770216305,4205.54765930603
+"SSP1","UMIC","Albania; Armenia; Azerbaijan; Kazakhstan; Libya; Maldives; Marshall Islands; Moldova; Montenegro; Serbia; Turkmenistan; Tuvalu",3465.27950030613,4205.54765930603
+"SSP2","LIC","Afghanistan; Burundi; Liberia; Niger; Tajikistan",1013.35559458802,5926.28554599383
+"SSP2","LMIC","Bangladesh; Kiribati; Kyrgyz Republic; Micronesia, Fed. Sts.; Solomon Islands; Timor-Leste; Ukraine; Vanuatu",1323.57072873896,5926.28554599383
+"SSP2","UMIC","Albania; Armenia; Azerbaijan; Iraq; Kazakhstan; Libya; Maldives; Marshall Islands; Moldova; Montenegro; Serbia; Turkmenistan; Tuvalu",3589.35922266684,5926.28554599383
