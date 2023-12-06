@@ -68,7 +68,7 @@ master = gni2020 %>% left_join(fin.con) %>%
   select(country, gni.2020.atlas, gdp.gni.ratio, iso3c, hh.exp.pcap.avg.2020, hh.exp.pcap.avg.day.2020) %>%
   right_join(gdp_pcap, by = c("iso3c"), multiple = "all") %>%
   
-  mutate(GNI.bil = GDP.bil / gdp.gni.ratio) %>%   # GNI in Atlas method (from 2017 PPP)
+  mutate(GNI.bil = GDP.bil / gdp.gni.ratio) %>%   # GNI now in current Atlas method (from 2017 PPP)
   mutate(gni.pcap = GNI.bil / POP.mil * 1000) %>%
   mutate(inc.grp = cut(gni.2020.atlas, breaks = thres, labels = FALSE)) %>%
   group_by(inc.grp) %>%
@@ -128,11 +128,11 @@ GNI.pov.relation = df %>% select(
 ) %>%
   # left_join(gini.wb) %>%
   left_join(gini.ssp) %>%
-  mutate(gni.day = gni.pcap / 365) %>% select(-gni.pcap) %>%
+  mutate(gni.day = gni.pcap / 365) %>% select(-gni.pcap) %>% # gni.pcap in 'current Atlas', how is it different '2011 Atlas'?
   mutate(ln.GNI = log(gni.day)) %>%
   ungroup()
 
-# Assume linear NPL estimation (model3 based on 2011 PPP NPL)
+# Assume linear NPL estimation (model3 based on 2011 PPP NPL)-> Now 2017 PPP (Dec 1 2023)
 ln.NPI.predict = predict(model3, newdata = GNI.pov.relation, type = 'response')
 
 # Raw (no lags) poverty line fit
@@ -140,7 +140,7 @@ df.povline <- GNI.pov.relation %>%
   
   # using the logistic or linear curve fit, derive the poverty line we will work with
   mutate(ln.NPI = ln.NPI.predict) %>%
-  mutate(povline.trend = pmax(pov.lowest, exp(ln.NPI))) %>% # 2011 PPP
+  mutate(povline.trend = pmax(pov.lowest, exp(ln.NPI)) * ppp.2017.to.2011) %>% # 2011 PPP 
   left_join(cty.grp)
   
 # Function definition
@@ -238,8 +238,6 @@ make.inf.table <- function(year) {
 
 inf.table = lapply(names(infsb), make.inf.table)
 names(inf.table) = names(infsb)
-
-inf.table[[1]] %>% left_join()
 
 
 # write.csv(infsb[["2050"]])

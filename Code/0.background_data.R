@@ -150,25 +150,18 @@ hist = read_xlsx(paste0(data.path, "Historical_poverty_lines_WB.xlsx"), skip=5) 
   # mutate(ln.NPL.normalized = (ln.NPL - min(ln.NPL))/(max(ln.NPL) - min(ln.NPL)))
 
 # Estimate different S-ish models
-# model1 <- glm(ln.NPL.normalized ~ ln.GNI, family=binomial(link='logit'), data=hist)
-# model2 <- nls(ln.NPL ~ a*exp(-b*exp(- c*ln.GNI)), data=hist, start=list(a=50, b=1, c=3)) # Gomperzt (Sigmoid)
 model3 <- lm(ln.NPL ~ ln.GNI, data=hist) 
-# model2 <- nls(ln.NPL ~ a/(1 + exp(-b * (ln.GNI-c)) ), data=hist, start=list(a=5, b=1, c=3))
 
 # Fitted curves
-# fitted.results1 <- predict(model1, newdata=hist, type='response')
-# fitted.results2 <- predict(model2, newdata=hist, type='response')
 fitted.results3 <- predict(model3, newdata=hist, type='response')  
 
 # Plot obs and predictions
 df.test = hist %>% 
-  # mutate(ln.fit1 = fitted.results1 * (max(ln.NPL) - min(ln.NPL)) + min(ln.NPL)) %>%
-  # mutate(ln.fit2 = fitted.results2) %>%
   mutate(ln.fit3 = fitted.results3) %>%
   mutate(
     # fit1 = exp(ln.fit1), 
     # fit2 = exp(ln.fit2), 
-    fit3 = exp(ln.fit3))
+
 
 # Figure XX in the paper
 ggplot(data = df.test) +

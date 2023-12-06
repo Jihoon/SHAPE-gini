@@ -117,7 +117,6 @@ create_pathways <- function(g.l.in,
 plot_povline <- function(traj, yr.end.figure = 2070) {
   
   # Setting up for figures
-  library(ggrepel)
   yr.end.figure <- 2060 # Last year in the x-axis
   df.p1 <-
     traj %>% filter(Year <= yr.end.figure) %>% group_by(country) %>%
