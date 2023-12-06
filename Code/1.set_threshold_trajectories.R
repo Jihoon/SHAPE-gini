@@ -165,19 +165,26 @@ l.output = create_pathways(
 
 realised_gini = l.output[[2]]
 
-write.csv(realised_gini %>%
+write_csv(realised_gini %>%
             left_join(gdp_annual %>% select(-Model)) %>% 
             select(Country=country, iso3c, 
                    Scenario, Year, 
-                   `GDP pathway` = GDP.bil,
+                   `GDP pathway ($bil)` = GDP.bil,
                    `Gini pathway` = gini.realised.trend,
-                   `Year when target achieved`=year.abstgt.achieved), 
+                   `Year when SDG1 achieved`=year.abstgt.achieved) %>%
+            mutate(across(where(is.numeric), ~ round(., 1))), 
           'Supplimentary table - Gini_GDP.csv')
 
-# Sample n countries from each income group not to over-crowd the figure
-sample.cty <- realised_gini %>% ungroup() %>% select(iso3c, inc.grp) %>% 
-  unique() %>%
-  group_by(inc.grp) %>% slice_sample(n=7) %>% 
+# # Sample n countries from each income group not to over-crowd the figure
+# sample.cty <- realised_gini %>% ungroup() %>% select(iso3c, inc.grp) %>% 
+#   unique() %>%
+#   group_by(inc.grp) %>% slice_sample(n=7) %>% 
+#   ungroup() %>% select(iso3c)
+
+# Sample 7 countries with biggest population in each income group
+sample.cty = pop_data %>% filter(Year == 2020, Scenario == "SSP1") %>% 
+  left_join(cty.grp) %>% group_by(inc.grp) %>% 
+  drop_na() %>% arrange(-POP.mil, inc.grp) %>% slice(1:7) %>% 
   ungroup() %>% select(iso3c)
 
 # Make plotss
@@ -190,26 +197,44 @@ plot_gini(realised_gini,
 
 # Identify infeasible countries by year ====
 infsb <- list()
-for (tgt in c("2030", "2050", "2070", "2100")) { 
-  infsb[[tgt]] = df.gini %>%
+tot.transfer <- list()
+for (tgt in seq(2025, 2050)) { 
+# for (tgt in c("2030", "2050", "2070", "2100")) { 
+  infsb.single = df.gini %>%
     group_by(iso3c, Scenario) %>%
-    filter(Year==as.numeric(tgt)) %>% filter(!years.ontrack, inc.grp != "HIC") %>%
+    filter(Year==tgt) %>% filter(!years.ontrack, inc.grp != "HIC") %>%
     mutate(hh.exp.pcap.avg.day.new = povline.trend.tgt * gini.baseyr / (gini.baseyr- gini.floor)) %>%
     left_join(pop_annual) %>%
     mutate(GDP_diff = (hh.exp.pcap.avg.day.new - hh.exp.pcap.avg.day) * POP.mil) # million dollar
+  
+  tot.transfer.single = infsb.single %>% 
+    filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") %>% 
+    group_by(Scenario) %>%
+    summarise(transfer = sum(GDP_diff)/1000) %>% # Billion $
+    mutate(Year = tgt)
+  
+  infsb[[as.character(tgt)]] = infsb.single
+  tot.transfer[[as.character(tgt)]] = tot.transfer.single
 }
 
-View(infsb[["2050"]])
-View(infsb[["2070"]])
-View(infsb[["2100"]])
+# DF of total transfer by year by scenario
+tot.transfer.df = bind_rows(tot.transfer) %>% group_by(Year) %>% 
+  arrange(transfer, .by_group = TRUE)
+
+
+
+# View(infsb[["2050"]])
+# View(infsb[["2070"]])
+# View(infsb[["2100"]])
 
 # Summarize the necessary transfer by scenario ($ mil) ====
-tot.transfer = infsb[["2070"]] %>% 
-  filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") %>% 
-  # group_by(Scenario, inc.grp) %>%
-  # summarise(transfer = sum(GDP_diff), n_country = length(unique(iso3c)))
-  group_by(Scenario) %>%
-  summarise(transfer = sum(GDP_diff))
+
+# tot.transfer = infsb[["2070"]] %>% 
+#   filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") %>% 
+#   # group_by(Scenario, inc.grp) %>%
+#   # summarise(transfer = sum(GDP_diff), n_country = length(unique(iso3c)))
+#   group_by(Scenario) %>%
+#   summarise(transfer = sum(GDP_diff))
 
 
 make.inf.table <- function(year) {
@@ -232,7 +257,7 @@ make.inf.table <- function(year) {
                     paste("Countries with infeasibility by", year),	
                     "Total transfer ($ mil.)",	"Scenario total ($ mil.)")
   
-  write.csv(df.out, file=paste0("unmet_countries_", year, ".csv"), row.names = FALSE)
+  write.csv(df.out, file=paste0("./Results/", "unmet_countries_", year, ".csv"), row.names = FALSE)
   return(df.out)
 }
 
@@ -245,11 +270,11 @@ names(inf.table) = names(infsb)
 l.size = 1.5
 scale.gdp = 0.3
 
-col_EI = "plum4"
-col_MC = "aquamarine3"
-col_RC = "goldenrod1"
-col_SSP1 = "royalblue1"
-col_SSP2 = "violetred1"
+col_EI = "midnightblue"
+col_MC = "aquamarine4"
+col_RC = "goldenrod3"
+col_SSP1 = "cyan"
+col_SSP2 = "black"
 
 scenario_cmap <- c("EI" = col_EI,
                    "MC" = col_MC,
@@ -258,7 +283,7 @@ scenario_cmap <- c("EI" = col_EI,
                    "SSP2" = col_SSP2)
 
               
-cty = "LBY"
+cty = "IND"
 ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
   geom_line(aes(
     y = gini.tgt.trend,
@@ -300,13 +325,14 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
       x = 2100,
       y = hh.exp.pcap.avg.day / scale.gdp,
       label = paste0(
-        "Current mean expenditure/cap:\n",
+        "Mean expenditure/cap in 2020:\n",
         format(hh.exp.pcap.avg.day, digits = 3),
         "($/day)"
       )
     ),
     hjust = 1
-  ) +
+  )+
+  geom_hline(yintercept = 8.84/ scale.gdp) +
   scale_y_continuous(
     # Features of the first axis
     name = "Gini",
@@ -323,7 +349,7 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
   theme_bw() +
   annotate(geom = "text",
            x = 2030,
-           y = 17,
+           y = 18,
            label = "Target Gini") +
   annotate(geom = "text",
            x = 2038,
@@ -331,41 +357,46 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
            label = "Historical Gini minimum") +
   annotate(geom = "text",
            x = 2070,
-           y = 18,
-           label = "Poverty line ($/day)") +
+           y = 38,
+           label = "Poverty lines ($/day)") +
   scale_color_manual(values = scenario_cmap)
 
 # Just about Gini (no second axis) ====
-
-ggplot(data = df.gini %>% filter(iso3c %in% c(cty), Year <= 2070), aes(x = Year)) +
+library(ggtext)
+df.data = df.gini %>% filter(iso3c %in% c(cty), Year <= 2070) %>%
+  mutate(Family = ifelse(grepl("SSP", Scenario), "SSP", "SDP"))
+ggplot(data = df.data, aes(x = Year)) +
   geom_line(aes(
     y = gini.tgt.trend,
     group = interaction(country, Scenario),
-    color = Scenario
-  ),
-  size = l.size * 0.3)  +
+    color = Scenario,
+    linetype = Family
+  ), size = l.size * 0.7, alpha = 0.3)  +
   geom_line(aes(
     y = gini.realised.trend,
     group = interaction(country, Scenario),
-    color = Scenario
-  ),
-  size = l.size)  +
+    color = Scenario,
+    linetype = Family
+  ), size = l.size)  +
   geom_line(aes(
     y = gini.floor,
     group = interaction(country, Scenario),
     color = Scenario
-  ),
-  linetype = "dashed",
-  size = l.size * 0.5)  +
-  geom_hline(yintercept = gini.lbound.innov[2],
-             linetype = "dashed",
-             color = col_EI) +
-  geom_hline(yintercept = gini.lbound.serv[2],
-             linetype = "dashed",
-             color = col_RC) +
-  geom_hline(yintercept = gini.lbound.soc[2],
-             linetype = "dashed",
-             color = col_MC) +
+  ), linetype = "dotted", size = l.size * 0.8)  +
+  # Mark the point where (pov headcount)=0 is met
+  geom_point(
+    data = . %>% filter(Year == year.abstgt.achieved) %>% distinct(country, Scenario, .keep_all=T),
+    aes(x = Year, 
+        y = gini.realised.trend,
+        color = Scenario),
+    shape = 8, size = 4
+  ) +
+  geom_point(
+    data = . %>% slice(1),
+    aes(x = Year, 
+        y = gini.baseyr),
+    shape = 3, size = 4
+  ) +
   scale_y_continuous(
     # Features of the first axis
     name = "Gini",
@@ -375,19 +406,37 @@ ggplot(data = df.gini %>% filter(iso3c %in% c(cty), Year <= 2070), aes(x = Year)
   labs(title = cty) +
   theme_bw() +
   annotate(geom = "text",
-           x = 2050,
-           y = 29,
-           label = "Desired traj.") +
-  annotate(geom = "text",
-           x = 2065,
-           y = 27.3,
-           label = "Realistic traj.") +
+           x = 2022,
+           y = 35.5,
+           label = "current level of inequality",
+           hjust = 0) +
   annotate(geom = "text",
            x = 2060,
-           y = 23.7,
-           label = "Historical Gini minimums") +
-  scale_color_manual(values = scenario_cmap)
+           y = 30,
+           label = "required for poverty eradication") +
+  annotate(geom = "text",
+           x = 2030,
+           y = 28,
+           label = "SDP Gini trajectories") +
+  annotate(geom = "text",
+           x = 2060,
+           y = 24.5,
+           label = "historical Gini minimums") +
+  annotate(geom = "text",
+           x = 2028,
+           y = 32,
+           label = "Gini reduction \n towards poverty eradication",
+           hjust = 0) +
+  scale_color_manual(values = scenario_cmap) +
+  scale_linetype_manual(values = c("solid", "twodash")) 
 
+# Transfer plot
+ggplot(tot.transfer.df %>% filter(Year <= 2040), aes(Year, transfer)) +
+  geom_col(aes(fill=Scenario), position=position_dodge(0.7)) +
+  xlim(2024, 2041) +
+  scale_fill_manual(values = scenario_cmap) +
+  labs(y="Global total transfer required (billion 2011 $PPP)")
+  
 
 
 # Export Gini to IAMC format
@@ -418,4 +467,4 @@ df.export = df.gini %>%
   )
 
 # write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',') # for >=5 year spells
-write_delim(df.export, file = "SHAPE_Gini_v1p2_annual.csv", delim = ',') # for >=10 year spells
+write_delim(df.export, file = "SHAPE_Gini_v1p3_annual.csv", delim = ',') # for >=10 year spells

@@ -4,6 +4,7 @@ library(countrycode)
 library(units)
 library(WDI)
 library(scales)
+library(ggrepel)
 
 library(here)
 try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
@@ -144,10 +145,14 @@ fin.con = reg.MSG %>% left_join(fin.con) %>% left_join(fin.con.median) %>%
 # Passthrough rate taken from Lakner et al. 2019
 passthrough = 0.85
 
-# Historical GDP/GNI vs poverty line by country (2011$ PPP or Atlas (GNI))
+# Historical GDP/GNI vs poverty line by country (Sourc: 2011$ PPP or Atlas (GNI))
+# To use the $2.15 poverty threshold, I had to convert the 2011 PPP to 2017.
+# So the regression from 'model3' gives 2017 PPP NPL.
 hist = read_xlsx(paste0(data.path, "Historical_poverty_lines_WB.xlsx"), skip=5) %>%
-  mutate(ln.NPL = log(NPL), ln.GNI = log(GNI)) #%>%
-  # mutate(ln.NPL.normalized = (ln.NPL - min(ln.NPL))/(max(ln.NPL) - min(ln.NPL)))
+  mutate(iso3c = countrycode(Country, origin = 'country.name', destination = 'iso3c')) %>%
+  left_join(ppp.conv) %>%
+  mutate(NPL_ppp2017 = NPL/ppp.2017.to.2011) %>%
+  mutate(ln.NPL = log(NPL_ppp2017), ln.GNI = log(GNI))
 
 # Estimate different S-ish models
 model3 <- lm(ln.NPL ~ ln.GNI, data=hist) 
@@ -158,20 +163,21 @@ fitted.results3 <- predict(model3, newdata=hist, type='response')
 # Plot obs and predictions
 df.test = hist %>% 
   mutate(ln.fit3 = fitted.results3) %>%
-  mutate(
-    # fit1 = exp(ln.fit1), 
-    # fit2 = exp(ln.fit2), 
+  mutate(fit3 = exp(ln.fit3)) %>% 
+  left_join(pop_data %>% filter(Year==2010, Scenario=="all_SHAPE_SDPs") %>% select(iso3c, POP.mil)) %>%
+  arrange(POP.mil)
 
 
 # Figure XX in the paper
-ggplot(data = df.test) +
-  geom_point(aes(GNI, NPL)) + # Observations
+ggplot(data = df.test, aes(GNI, NPL_ppp2017, label = Country)) +
+  geom_point() + # Observations
   scale_x_continuous(trans='log', breaks=scales::trans_breaks("log", function(x) 2^x)) +
   scale_y_continuous(trans='log', breaks=scales::trans_breaks("log", function(x) 2^x)) +
   # geom_line(aes(GNI, pmax(pov.lowest, fit1), color='Logistic'), size=1.5) +
   geom_line(aes(GNI, pmax(pov.lowest, fit3), color='Linear'), size=1.5) +
+  geom_text_repel(data = df.test %>% filter(POP.mil > 30), min.segment.length=0.1) +
   theme_bw() +
-  labs(x="GNI per capita per day (2011 Atlas USD)", y="National poverty line per day (2011 PPP)") +
+  labs(x="GNI per capita per day (2011 Atlas USD)", y="National poverty line per day (2017 PPP)") +
   theme(legend.position="none")
 
 # # Test plot to observe the behavior
