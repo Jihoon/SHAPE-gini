@@ -194,3 +194,21 @@ ggplot(data = df.test, aes(GNI, NPL_ppp2017, label = Country)) +
 # 
 # # Model2 makes more sense in that the richer will get more demanding NPL.
 
+# Validation of transfer amount at the latest year ====
+df_pov = WDI(indicator = 
+               c("SI.POV.GAPS", # Poverty gap at $2.15 a day (2017 PPP) (%)
+                 "SP.POP.TOTL", # Population total
+                 "SI.POV.NAHC"  # Poverty headcount ratio at national poverty lines (% of population)
+               ), 
+             start = 2015, end=2020, extra=TRUE)
+df_pov %>% filter(grepl("Low & middle income", country)) %>%
+  mutate(transfer = SI.POV.GAPS/100*SP.POP.TOTL*2.15*365/1e9)
+
+# Retrieve pov ratio at NPL
+df_povhc = WDI(indicator = "SI.POV.NAHC",  # Poverty headcount ratio at national poverty lines (% of population)
+               latest=3, extra=TRUE) 
+df_povhc = df_povhc %>%
+  group_by(country, iso3c) %>%
+  summarise(povratio = mean(SI.POV.NAHC), years=max(year)-min(year), diff=max(SI.POV.NAHC)-min(SI.POV.NAHC)) %>% 
+  ungroup() 
+  
