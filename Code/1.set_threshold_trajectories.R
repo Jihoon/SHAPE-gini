@@ -204,14 +204,18 @@ for (tgt in seq(2020, 2100)) {
   infsb.single = realised_gini %>%
     group_by(iso3c, Scenario) %>%
     filter(Year==tgt) %>% filter(!years.ontrack, inc.grp != "HIC") %>%
+    # Merge base poverty ratio at NPL
     left_join(df_povhc %>% select(iso3c, povratio) %>% mutate(povratio = povratio/100)) %>%
-    replace_na(list(povratio=0.2)) %>% # imputation for countries missing povratio
-    # mutate(hh.exp.pcap.avg.day.new = povline.trend.tgt * gini.baseyr / (gini.baseyr- gini.floor)) %>%
+    # Impute for countries missing pov ratio (default=0.2)
+    replace_na(list(povratio=0.2)) %>% 
+    # Equations given in method section
     mutate(d.y = hh.exp.pcap.avg.day * (1-gini.floor/gini.baseyr)) %>%
     mutate(hh.exp.pcap.avg.day.gap.filled = hh.exp.pcap.avg.day + (povline.trend.tgt - d.y)) %>%
+    # Import population
     left_join(pop_annual %>%
                 mutate(Scenario = ifelse(grepl("SSP", Scenario), Scenario, paste0('SDP-', Scenario)))) %>%
-    mutate(GDP_diff = 365 * (povline.trend.tgt - d.y) * POP.mil * povratio) # million dollar
+    # Calculate transfer for each country
+    mutate(GDP_diff = 365 * (povline.trend.tgt - d.y) * POP.mil * povratio) # million $
   
   tot.transfer.single = infsb.single %>% 
     filter(gini.baseyr > gini.minimum.abs) %>% 
