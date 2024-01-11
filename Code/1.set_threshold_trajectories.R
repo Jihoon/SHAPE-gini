@@ -272,101 +272,105 @@ scenario_cmap <- c("SDP-EI" = col_EI,
                    "SSP1" = col_SSP1,
                    "SSP2" = col_SSP2)
 
-              
-cty = "IND"
-ggplot(data = df.gini %>% filter(iso3c %in% c(cty)), aes(x = Year)) +
-  geom_line(aes(
-    y = gini.tgt.trend,
-    group = interaction(country, Scenario),
-    color = Scenario
-  ),
-  size = l.size * 0.3)  +
-  geom_line(aes(
-    y = gini.realised.trend,
-    group = interaction(country, Scenario),
-    color = Scenario
-  ),
-  size = l.size)  +
-  geom_line(aes(y=gini.floor, group=interaction(country, Scenario), color=Scenario), size=l.size*0.5)  +
-  geom_line(
-    aes(
-      y = povline.trend.tgt / scale.gdp,
-      group = interaction(iso3c, Scenario),
-      color = Scenario,
-      linetype = Scenario,
-    ),
-    size = l.size
-  ) +
-  geom_hline(yintercept = gini.lbound.innov[2],
-             linetype = "dashed",
-             color = col_EI) +
-  geom_hline(yintercept = gini.lbound.serv[2],
-             linetype = "dashed",
-             color = col_RC) +
-  geom_hline(yintercept = gini.lbound.soc[2],
-             linetype = "dashed",
-             color = col_MC) +
-  geom_text(
-    data = df.gini %>%
-      # left_join(df) %>%
-      filter(Year == 2020, iso3c %in% c(cty),
-             Scenario == "EI"),
-    aes(
-      x = 2100,
-      y = hh.exp.pcap.avg.day / scale.gdp,
-      label = paste0(
-        "Mean expenditure/cap in 2020:\n",
-        format(hh.exp.pcap.avg.day, digits = 3),
-        "($/day)"
-      )
-    ),
-    hjust = 1
-  )+
-  geom_hline(yintercept = 8.84/ scale.gdp) +
-  scale_y_continuous(
-    # Features of the first axis
-    name = "Gini",
-    breaks = seq(0, 50, 10),
-    
-    # Add a second axis and specify its features
-    sec.axis = sec_axis( ~ . * scale.gdp, name = "Poverty line ($/day)", breaks = seq(0, max(
-      df.gini$povline.trend.tgt
-    ) + 1, 2))
-    # sec.axis = sec_axis(~.*scale.gdp, name="Daily GDP per capita")
-  ) +
-  scale_x_continuous(breaks = seq(2020, 2100, 5), minor_breaks = NULL) +
-  labs(title = cty) +
-  theme_bw() +
-  annotate(geom = "text",
-           x = 2030,
-           y = 18,
-           label = "Target Gini") +
-  annotate(geom = "text",
-           x = 2038,
-           y = 23,
-           label = "Historical Gini minimum") +
-  annotate(geom = "text",
-           x = 2070,
-           y = 38,
-           label = "Poverty lines ($/day)") +
-  scale_color_manual(values = scenario_cmap)
 
-# Just about Gini (no second axis) ====
+library(ggpubr)
+
+p_gini = list()
+p_npl = list()
+
+# Two country examples ====
+for (cty in c("LBY", "KGZ")) {
+# for (cty in c("AFG")) {
+  
+  df.cty = realised_gini %>% filter(iso3c %in% c(cty)) %>%
+    mutate(Family = ifelse(grepl("SSP", Scenario), "SSP", "SDP"))
+  
+  p_npl[[cty]] = ggplot(data = df.cty, aes(x = Year)) +
+    geom_line(aes(y = povline.trend.tgt,
+                  group = interaction(iso3c, Scenario),
+                  color = Scenario,
+                  linetype = Family,
+                  size = Family)) +
+    geom_text(
+      data = realised_gini %>%
+        filter(Year == 2020, iso3c %in% c(cty), Scenario == "SDP-EI"),
+      aes(x = 2020, y = hh.exp.pcap.avg.day, 
+          label = paste0("Mean expenditure/cap in 2020:\n",
+                         format(hh.exp.pcap.avg.day, digits = 3),
+                         "($/day)")), hjust = 0) +
+    geom_hline(
+      data = realised_gini %>%
+        filter(Year == 2020, iso3c %in% c(cty), Scenario == "SDP-EI"), 
+      aes(yintercept = hh.exp.pcap.avg.day))  +
+    scale_y_continuous(limits = c(2, 20)) +
+    theme(plot.margin = margin(1, 0,0,0, "cm")) +
+    labs(y = "Poverty lines ($/day)") + 
+    scale_linetype_manual(values = c("solid", "twodash")) +
+    scale_color_manual(values = scenario_cmap) +
+    scale_size_manual(values = l.size * c(1, 0.7))
+  
+  p_gini[[cty]]  = ggplot(data = df.cty, aes(x = Year)) +
+    geom_line(aes(y = gini.tgt.trend,
+                  group = interaction(country, Scenario),
+                  color = Scenario,
+                  linetype = Family), 
+              size = l.size * 0.7, alpha = 0.3)  +
+    geom_line(aes(y = gini.realised.trend,
+                  group = interaction(country, Scenario),
+                  color = Scenario,
+                  linetype = Family,
+                  size = Family)) +
+    labs(y = "Gini") + 
+    # geom_line(aes(y=gini.floor, 
+    #               group=interaction(country, Scenario), 
+    #               color=Scenario), 
+    #           linetype = "dotted", size = l.size * 0.8) +
+    scale_linetype_manual(values = c("solid", "twodash")) +
+    scale_color_manual(values = scenario_cmap) +
+    scale_size_manual(values = l.size * c(1, 0.7)) +
+    
+    scale_y_continuous(limits = c(5, 40)) +
+    # ylim(c(15, 30)) +
+    scale_x_continuous(breaks = seq(2020, 2100, 10), minor_breaks = NULL) +
+    # labs(title = cty) +
+    theme(plot.margin = margin(1, 0,0,0, "cm")) +
+    annotate(geom = "text",
+             x = 2080,
+             y = 20,
+             label = "required for poverty eradication") +
+    annotate(geom = "text",
+             x = 2070,
+             y = 28,
+             label = "empirical lower bounds")
+}
+
+ggarrange(p_gini[[1]] + rremove("legend") + rremove("x.text"), p_gini[[2]] + rremove("x.text"), 
+          p_npl[[1]] + rremove("legend"), p_npl[[2]],
+          labels = c("a) Libya (UMIC): Gini", "b) Kirgizstan (LMIC): Gini", 
+                     "c) Libya (UMIC): Poverty line", "d) Kirgizstan (LMIC): Poverty line"),
+          hjust = 0, vjust=1,
+          ncol = 2, nrow = 2, 
+          common.legend=TRUE, legend="right")
+
+
+# Plot just about Gini (no second axis) ====
 library(ggtext)
-df.data = df.gini %>% filter(iso3c %in% c(cty), Year <= 2070) %>%
-  mutate(Family = ifelse(grepl("SSP", Scenario), "SSP", "SDP"))
+cty = "IND"
+df.data = realised_gini %>% filter(iso3c %in% c(cty), Year <= 2070) %>%
+  # mutate(Family = ifelse(grepl("SSP", Scenario), "SSP", "SDP"))
+  filter(grepl("SDP", Scenario))
 ggplot(data = df.data, aes(x = Year)) +
   geom_line(aes(
     y = gini.tgt.trend,
     group = interaction(country, Scenario),
     color = Scenario,
-    linetype = Family
+    # linetype = Family
   ), size = l.size * 0.7, alpha = 0.3)  +
   geom_line(aes(
     y = gini.realised.trend,
     group = interaction(country, Scenario),
     color = Scenario,
-    linetype = Family
+    # linetype = Family
   ), size = l.size)  +
   geom_line(aes(
     y = gini.floor,
@@ -420,17 +424,66 @@ ggplot(data = df.data, aes(x = Year)) +
   scale_color_manual(values = scenario_cmap) +
   scale_linetype_manual(values = c("solid", "twodash")) 
 
-# Transfer plot
-ggplot(tot.transfer.df %>% filter(Year <= 2040), aes(Year, transfer)) +
-  geom_col(aes(fill=Scenario), position=position_dodge(0.7)) +
-  xlim(2024, 2041) +
+
+# Histogram of achievement year ====
+aa = realised_gini %>% group_by(country, iso3c, Scenario) %>% 
+  select(year.abstgt.achieved, inc.grp) %>% slice(1)
+aaa = aa %>% group_by(Scenario) %>% select(year.abstgt.achieved, inc.grp) %>%
+  filter(grepl("SDP", Scenario))
+
+aaa %>%
+  ggplot(aes(x=year.abstgt.achieved, fill=Scenario)) +
+  geom_histogram(color="#e9ecef", alpha=0.6, position = 'identity', binwidth=1) +
+  # theme_ipsum() +
+  labs(fill="")
+
+p_histo = aaa %>%
+  ggplot(aes(x=year.abstgt.achieved, fill=Scenario)) +
+  geom_histogram(color="#e9ecef", position = 'identity', binwidth=1) +
+  theme_bw() +
+  theme(panel.border = element_rect(fill=NA,color="grey80", size=0.5, linetype="solid"),
+        legend.position = "none") +
+  geom_vline(aes(xintercept=2030), linetype ="dotdash") +
   scale_fill_manual(values = scenario_cmap) +
-  labs(y="Global total transfer required (billion 2011 $PPP)")
+  scale_x_continuous(breaks=seq(2030, 2100, 10)) + 
+  facet_grid(rows=vars(Scenario)) +
+  labs(x="Year when the target is reached", y="Number of countries") #+
+  # xlim(c(2025, 2050))
+
+aaa %>% 
+  ggplot(aes(x=year.abstgt.achieved, fill=Scenario)) +
+  geom_histogram(color="#e9ecef", alpha=0.5, position = 'identity', binwidth=1) +
+  theme_bw() +
+  theme(panel.border = element_rect(fill=NA,color="grey80", size=0.5, 
+                                    linetype="solid")) +
+  # facet_grid(rows=vars(Scenario), cols=vars(inc.grp)) +
+  scale_fill_manual(values = scenario_cmap) +
+  # facet_grid(rows=vars(Scenario)) +
+  labs(fill="", x="Year target achieved", y="Number of countries") +
+  xlim(c(2025, 2050))
+
+ggarrange(p_gini, p_histo, ncol=1, labels="auto", heights = c(1, 0.4))
+
+
+  # Transfer plot ====
+library(ggpattern)
+ggplot(tot.transfer.df %>% filter(grepl("SDP", Scenario), Year%%5==0), 
+       aes(Year, transfer)) +
+  geom_col(aes(fill=Scenario), 
+                   # pattern_angle=0, pattern_fill="white", pattern_spacing=0.01,
+                   # pattern_color="white", pattern="stripe", 
+                   position="dodge", width = 3.9
+           ) +
+  xlim(2017, 2103) +
+  scale_fill_manual(values = scenario_cmap) +
+  labs(y="Global total transfer required (billion 2011 $PPP)") +
+  theme_bw() +
+  theme(panel.border = element_rect(fill=NA,color="grey80", size=0.5, linetype="solid")) 
   
 
 
 # Export Gini to IAMC format
-df.export = df.gini %>%
+df.export = realised_gini %>%
   pivot_wider(
     id_cols = c(iso3c:Scenario, tgt.achieved),
     values_from = gini.realised.trend,
