@@ -1,5 +1,6 @@
 library(patchwork)
 library(zoo) # for 'na.approx'
+library(RColorBrewer)
 
 library(here)
 try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
@@ -165,8 +166,14 @@ l.output = create_pathways(
 
 realised_gini = l.output[[2]]
 
+# Add 'SDP' prefix to the scenario name
+realised_gini = realised_gini %>%
+  mutate(Scenario = ifelse(grepl("SSP", Scenario), Scenario, paste0('SDP-', Scenario)))
+
 write_csv(realised_gini %>%
-            left_join(gdp_annual %>% select(-Model)) %>% 
+            left_join(gdp_annual %>%
+                        mutate(Scenario = ifelse(grepl("SSP", Scenario), Scenario, paste0('SDP-', Scenario))) %>% 
+                        select(-Model)) %>% 
             select(Country=country, iso3c, 
                    Scenario, Year, 
                    `GDP pathway ($bil)` = GDP.bil,
@@ -175,12 +182,6 @@ write_csv(realised_gini %>%
             mutate(across(where(is.numeric), ~ round(., 1))), 
           'Supplimentary table - Gini_GDP.csv')
 
-# # Sample n countries from each income group not to over-crowd the figure
-# sample.cty <- realised_gini %>% ungroup() %>% select(iso3c, inc.grp) %>% 
-#   unique() %>%
-#   group_by(inc.grp) %>% slice_sample(n=7) %>% 
-#   ungroup() %>% select(iso3c)
-
 # Sample 7 countries with biggest population in each income group
 sample.cty = pop_data %>% filter(Year == 2020, Scenario == "SSP1") %>% 
   left_join(cty.grp) %>% group_by(inc.grp) %>% 
@@ -188,9 +189,9 @@ sample.cty = pop_data %>% filter(Year == 2020, Scenario == "SSP1") %>%
   ungroup() %>% select(iso3c)
 
 # Make plotss
-plot_povline(l.output[[1]])
+plot_povline(realised_gini)
 lookup <- c(Year = "year", Scenario = "scenario", gini.ssp = "gini")
-plot_gini(realised_gini, 
+p_gini = plot_gini(realised_gini, 
           df.ssp = df.ssp %>% 
             rename(all_of(lookup)) %>% 
             select(-pop_mil, -gdp_ppp_2005_bil))
@@ -217,51 +218,40 @@ for (tgt in seq(2025, 2050)) {
   tot.transfer[[as.character(tgt)]] = tot.transfer.single
 }
 
+infsb.df = bind_rows(infsb) %>% filter(grepl("SDP", Scenario))
+
 # DF of total transfer by year by scenario
 tot.transfer.df = bind_rows(tot.transfer) %>% group_by(Year) %>% 
-  arrange(transfer, .by_group = TRUE)
-
-
-
-# View(infsb[["2050"]])
-# View(infsb[["2070"]])
-# View(infsb[["2100"]])
-
-# Summarize the necessary transfer by scenario ($ mil) ====
-
-# tot.transfer = infsb[["2070"]] %>% 
-#   filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") %>% 
-#   # group_by(Scenario, inc.grp) %>%
-#   # summarise(transfer = sum(GDP_diff), n_country = length(unique(iso3c)))
-#   group_by(Scenario) %>%
-#   summarise(transfer = sum(GDP_diff))
+  arrange(transfer, .by_group = TRUE) %>%
+  mutate(Family = ifelse(grepl("SSP", Scenario), "SSP", "SDP")) 
 
 
 make.inf.table <- function(year) {
   df = infsb[[year]]
   tot.transfer = df %>% 
-    filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") 
+    filter(gini.baseyr > gini.minimum.abs) 
   
   df.out = df %>%
     group_by(Scenario, inc.grp) %>%
-    summarise(txt = paste(country, collapse = "; ")) %>%
+    summarise(txt = paste(country, collapse = "; "), n=n()) %>%
     left_join(tot.transfer %>% group_by(Scenario, inc.grp) %>%
-                summarise(transfer = sum(GDP_diff))) %>%
+                summarise(transfer = sum(GDP_diff)/1000)) %>%
     left_join(tot.transfer %>% 
                 group_by(Scenario) %>%
-                summarise(transfer = sum(GDP_diff)), 
+                summarise(transfer = sum(GDP_diff)/1000), 
               by=c("Scenario"), 
               suffix = c(".inc.grp", ".scen"))
   
   names(df.out) = c("Scenario",	"Income group",	
                     paste("Countries with infeasibility by", year),	
-                    "Total transfer ($ mil.)",	"Scenario total ($ mil.)")
+                    "Total transfer ($ bil.)",	"Scenario total ($ bil.)")
   
   write.csv(df.out, file=paste0("./Results/", "unmet_countries_", year, ".csv"), row.names = FALSE)
   return(df.out)
 }
 
-inf.table = lapply(names(infsb), make.inf.table)
+# inf.table = lapply(names(infsb), make.inf.table)
+inf.table = lapply(c("2030", "2050", "2100"), make.inf.table)
 names(inf.table) = names(infsb)
 
 
@@ -276,9 +266,9 @@ col_RC = "goldenrod3"
 col_SSP1 = "cyan"
 col_SSP2 = "black"
 
-scenario_cmap <- c("EI" = col_EI,
-                   "MC" = col_MC,
-                   "RC" = col_RC,
+scenario_cmap <- c("SDP-EI" = col_EI,
+                   "SDP-MC" = col_MC,
+                   "SDP-RC" = col_RC,
                    "SSP1" = col_SSP1,
                    "SSP2" = col_SSP2)
 
@@ -403,7 +393,7 @@ ggplot(data = df.data, aes(x = Year)) +
     breaks = seq(20, 40, 2)
   ) +
   scale_x_continuous(breaks = seq(2020, 2070, 10), minor_breaks = NULL) +
-  labs(title = cty) +
+  labs(title = "India") +
   theme_bw() +
   annotate(geom = "text",
            x = 2022,
@@ -412,7 +402,7 @@ ggplot(data = df.data, aes(x = Year)) +
            hjust = 0) +
   annotate(geom = "text",
            x = 2060,
-           y = 30,
+           y = 29,
            label = "required for poverty eradication") +
   annotate(geom = "text",
            x = 2030,
@@ -421,7 +411,7 @@ ggplot(data = df.data, aes(x = Year)) +
   annotate(geom = "text",
            x = 2060,
            y = 24.5,
-           label = "historical Gini minimums") +
+           label = "empirical Gini lower bounds") +
   annotate(geom = "text",
            x = 2028,
            y = 32,
