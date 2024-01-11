@@ -199,17 +199,22 @@ p_gini = plot_gini(realised_gini,
 # Identify infeasible countries by year ====
 infsb <- list()
 tot.transfer <- list()
-for (tgt in seq(2025, 2050)) { 
-# for (tgt in c("2030", "2050", "2070", "2100")) { 
-  infsb.single = df.gini %>%
+for (tgt in seq(2020, 2100)) {
+# for (tgt in c(2020)) {
+  infsb.single = realised_gini %>%
     group_by(iso3c, Scenario) %>%
     filter(Year==tgt) %>% filter(!years.ontrack, inc.grp != "HIC") %>%
-    mutate(hh.exp.pcap.avg.day.new = povline.trend.tgt * gini.baseyr / (gini.baseyr- gini.floor)) %>%
-    left_join(pop_annual) %>%
-    mutate(GDP_diff = (hh.exp.pcap.avg.day.new - hh.exp.pcap.avg.day) * POP.mil) # million dollar
+    left_join(df_povhc %>% select(iso3c, povratio) %>% mutate(povratio = povratio/100)) %>%
+    replace_na(list(povratio=0.2)) %>% # imputation for countries missing povratio
+    # mutate(hh.exp.pcap.avg.day.new = povline.trend.tgt * gini.baseyr / (gini.baseyr- gini.floor)) %>%
+    mutate(d.y = hh.exp.pcap.avg.day * (1-gini.floor/gini.baseyr)) %>%
+    mutate(hh.exp.pcap.avg.day.gap.filled = hh.exp.pcap.avg.day + (povline.trend.tgt - d.y)) %>%
+    left_join(pop_annual %>%
+                mutate(Scenario = ifelse(grepl("SSP", Scenario), Scenario, paste0('SDP-', Scenario)))) %>%
+    mutate(GDP_diff = 365 * (povline.trend.tgt - d.y) * POP.mil * povratio) # million dollar
   
   tot.transfer.single = infsb.single %>% 
-    filter(gini.baseyr > gini.minimum.abs, iso3c != "UKR") %>% 
+    filter(gini.baseyr > gini.minimum.abs) %>% 
     group_by(Scenario) %>%
     summarise(transfer = sum(GDP_diff)/1000) %>% # Billion $
     mutate(Year = tgt)
@@ -469,11 +474,7 @@ ggarrange(p_gini, p_histo, ncol=1, labels="auto", heights = c(1, 0.4))
 library(ggpattern)
 ggplot(tot.transfer.df %>% filter(grepl("SDP", Scenario), Year%%5==0), 
        aes(Year, transfer)) +
-  geom_col(aes(fill=Scenario), 
-                   # pattern_angle=0, pattern_fill="white", pattern_spacing=0.01,
-                   # pattern_color="white", pattern="stripe", 
-                   position="dodge", width = 3.9
-           ) +
+  geom_col(aes(fill=Scenario), position="dodge", width = 3.9) +
   xlim(2017, 2103) +
   scale_fill_manual(values = scenario_cmap) +
   labs(y="Global total transfer required (billion 2011 $PPP)") +
