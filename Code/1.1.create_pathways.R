@@ -116,37 +116,36 @@ create_pathways <- function(g.l.in,
 # plot poverty line targets ====
 plot_povline <- function(traj, yr.end.figure = 2070) {
   
+  # Set color palette
+  colors = brewer.pal(7, "Dark2")
+  
   # Setting up for figures
-  yr.end.figure <- 2060 # Last year in the x-axis
   df.p1 <-
     traj %>% filter(Year <= yr.end.figure) %>% group_by(country) %>%
-    inner_join(sample.cty)
+    inner_join(sample.cty) %>% group_by(inc.grp) %>%
+    mutate(col.ind = country %>% as.factor() %>% as.numeric() %>% as.character()) %>% ungroup() 
   
-  p1 <-
-    ggplot(data = df.p1, aes(
-      x = Year,
-      colour = country,
-      group = country
-    )) +
+  p1 <- df.p1 %>%
+    ggplot(aes(x = Year, colour = col.ind)) +
     facet_grid(inc.grp ~ Scenario, scales = "free") +
     geom_line(aes(y = povline.trend.tgt)) +
     geom_text_repel(
       data = . %>% filter(Year == 2060) %>% distinct(country, .keep_all = T),
       aes(x = 2060, y = povline.trend.tgt, label = iso3c),
-      direction = "y",
       segment.color = 'grey80',
       # nudge_x = 100,
+      fontface = "bold",
+      direction = "both",
       min.segment.length = 0.1,
-      max.overlaps = 15
+      max.overlaps = 10
     ) +
-    ggtitle(
-      paste0(
-        "Poverty line projections based on GNI development (Minimum threshold targets)"
-      )
-    ) +
+    scale_colour_manual(values = colors) +
     ylab("Poverty line (2011$ PPP/day)") +
     xlab(NULL) +
-    theme(legend.position = "none")
+    theme_bw() +
+    theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust=1),
+          panel.border = element_rect(fill=NA,color="grey80", size=0.5, 
+                                      linetype="solid")) 
   
   ggsave(
     plot = p1,
@@ -160,10 +159,9 @@ plot_povline <- function(traj, yr.end.figure = 2070) {
 
 
 # plot realised gini pathways ====
-plot_gini <- function(realised_gini, yr.end.figure = 2070, df.ssp) {
+plot_gini <- function(realised_gini, yr.end.figure = 2070, df.ssp, onlySDP=TRUE) {
   
   library(geomtextpath)
-  library(RColorBrewer)
   
   df.gini.realised <- realised_gini %>%
     filter(Year <= yr.end.figure) %>% 
@@ -174,15 +172,21 @@ plot_gini <- function(realised_gini, yr.end.figure = 2070, df.ssp) {
     mutate(gini.ssp = ifelse(Scenario %in% c("SSP1", "SSP2"), na.approx(gini.ssp), gini.ssp)) %>%
     ungroup() %>% group_by(inc.grp) %>%
     mutate(col.ind = country %>% as.factor() %>% as.numeric() %>% as.character()) %>% ungroup() 
+  if (onlySDP) {
+    df.gini.realised <- df.gini.realised %>% 
+      mutate(gini.realised.trend = ifelse(grepl("SSP", Scenario), 
+                                          NA, gini.realised.trend))
+  }
   View(df.gini.realised %>% ungroup() %>% count(iso3c, inc.grp))
   
   # Set color palette
   colors = brewer.pal(7, "Dark2")
   
   p2 <- df.gini.realised %>%
-    ggplot(aes(x = Year, colour=col.ind, label = iso3c)) +
+    ggplot(aes(x = Year, colour=col.ind)) +
     facet_grid(inc.grp ~ Scenario, scales = "free") +
-    geom_vline(xintercept=2030, linetype ="dotdash") +
+    geom_vline(data = df.gini.realised %>% filter(grepl("SDP", Scenario)),
+               aes(xintercept=2030), linetype ="dotdash") +
     geom_line(aes(y = gini.realised.trend)) +
     geom_line(aes(y = gini.ssp), linetype="twodash") +
     geom_text_repel(
@@ -202,8 +206,11 @@ plot_gini <- function(realised_gini, yr.end.figure = 2070, df.ssp) {
       shape = 8
     ) +
     scale_colour_manual(values = colors) +
-    ggtitle(paste0("Gini trajectories")) +
-    theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust=1)) +
+    # ggtitle(paste0("Gini trajectories")) +
+    theme_bw() +
+    theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust=1),
+          panel.border = element_rect(fill=NA,color="grey80", size=0.5, 
+                                      linetype="solid")) +
     labs(y = "Gini")
   
   print(p2)
@@ -215,4 +222,6 @@ plot_gini <- function(realised_gini, yr.end.figure = 2070, df.ssp) {
     dpi = 300,
     units = "cm"
   )
+  
+  return(p2)
 }
