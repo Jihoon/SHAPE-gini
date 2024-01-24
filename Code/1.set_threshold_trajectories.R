@@ -17,10 +17,8 @@ gini.lbound.innov <- 26.2 # 5% percentile (directly from povcalnet)
 gini.lbound.serv <- 24.8  # 2% percentile
 gini.lbound.soc <- 24     # 1% percentile
 
-# Rate of Gini reduction (Unit?)
-# dgini is -2.1% ~ 1.6%/year for 80% of observation (for 5yr spells)
-# dgini is -2.8% ~ 2.1%/year for 90% of observation (for 5yr spells)
-dgini.lbound.innov <- 0.0176  #(for >=10yr spells)
+# Rate of Gini reduction (% of Gini values)
+dgini.lbound.innov <- 0.0176  
 dgini.lbound.serv <- 0.0214
 dgini.lbound.soc <- 0.0248
 
@@ -73,7 +71,7 @@ master = gni2020 %>% left_join(fin.con) %>%
   mutate(gni.pcap = GNI.bil / POP.mil * 1000) %>%
   mutate(inc.grp = cut(gni.2020.atlas, breaks = thres, labels = FALSE)) %>%
   group_by(inc.grp) %>%
-  mutate(grp.lower = pmax(inc.grp - 1, 1)) %>% # The group below
+  # mutate(grp.lower = pmax(inc.grp - 1, 1)) %>% # The group below
   group_by(country) %>% drop_na(gdp.pcap)
 
 
@@ -83,12 +81,6 @@ master = gni2020 %>% left_join(fin.con) %>%
 # But WDI's poverty rate gives only 22% for 2019 (https://data.worldbank.org/indicator/SI.POV.NAHC?locations=KI)
 # master <- master %>% filter(!iso3c %in% c("KIR", "AZE"))
 
-cty.grp <-
-  gni2020 %>% select(iso3c, inc.grp) %>% mutate(inc.grp = factor(
-    inc.grp,
-    levels = c(1, 2, 3, 4),
-    labels = c("LIC", "LMIC", "UMIC", "HIC")
-  ))
 
 # Derive avg HH exp projections from GDP trajectories by scenario
 # Unit: HH and GDP in 2017$ PPP, GNI in Atlas current
@@ -99,8 +91,8 @@ df = master %>% ungroup() %>%
     GDP.bil,
     GNI.bil,
     gdp.gni.ratio,
-    ppp.2005.to.2017,
-    grp.lower
+    ppp.2005.to.2017
+    # grp.lower
   )) %>%
   drop_na() %>%
   filter(Year >= 2020) %>%
@@ -199,15 +191,20 @@ p_gini = plot_gini(realised_gini,
 # Identify infeasible countries by year ====
 infsb <- list()
 tot.transfer <- list()
+r_pov_impute = 0.3
 for (tgt in seq(2020, 2100)) {
 # for (tgt in c(2020)) {
   infsb.single = realised_gini %>%
     group_by(iso3c, Scenario) %>%
-    filter(Year==tgt) %>% filter(!years.ontrack, inc.grp != "HIC") %>%
+    filter(Year==tgt) %>% 
+    filter(!years.ontrack, inc.grp != "HIC", !iso3c %in% c("AZE", "UKR") ) %>%
     # Merge base poverty ratio at NPL
     left_join(df_povhc %>% select(iso3c, povratio) %>% mutate(povratio = povratio/100)) %>%
-    # Impute for countries missing pov ratio (default=0.2)
-    replace_na(list(povratio=0.2)) %>% 
+    # Impute for countries missing pov ratio (default=0.3)
+    replace_na(list(povratio=r_pov_impute)) %>% 
+    # Interpolate the linearly decreasing pov ratio
+    replace_na(list(year.abstgt.achieved = 2150)) %>%
+    mutate(povratio=povratio * (year.abstgt.achieved-Year) / (year.abstgt.achieved-2020)) %>%
     # Equations given in method section
     mutate(d.y = hh.exp.pcap.avg.day * (1-gini.floor/gini.baseyr)) %>%
     mutate(hh.exp.pcap.avg.day.gap.filled = hh.exp.pcap.avg.day + (povline.trend.tgt - d.y)) %>%
@@ -261,7 +258,7 @@ make.inf.table <- function(year) {
 
 # inf.table = lapply(names(infsb), make.inf.table)
 inf.table = lapply(c("2030", "2050", "2100"), make.inf.table)
-names(inf.table) = names(infsb)
+# names(inf.table) = names(infsb)
 
 
 # write.csv(infsb[["2050"]])
@@ -476,12 +473,18 @@ ggarrange(p_gini, p_histo, ncol=1, labels="auto", heights = c(1, 0.4))
 
   # Transfer plot ====
 library(ggpattern)
-ggplot(tot.transfer.df %>% filter(grepl("SDP", Scenario), Year%%5==0), 
+trasfer.plot.data = tot.transfer.df %>% 
+  filter(grepl("SDP", Scenario), Year%%5==0)
+ggplot(trasfer.plot.data %>% filter(Year!=2020), 
        aes(Year, transfer)) +
   geom_col(aes(fill=Scenario), position="dodge", width = 3.9) +
-  xlim(2017, 2103) +
+  geom_col(data=tot.transfer.df %>% filter(Year==2020, Scenario=="SDP-MC") %>%
+             mutate(Scenario="Base"), 
+           aes(Year, transfer), position="dodge", width = 2) +
   scale_fill_manual(values = scenario_cmap) +
   labs(y="Global total transfer required (billion 2011 $PPP)") +
+  scale_x_continuous(breaks=seq(2020, 2060, 5), limits = c(2017, 2063)) +
+  scale_y_continuous(breaks=seq(0, 2500, 500)) +
   theme_bw() +
   theme(panel.border = element_rect(fill=NA,color="grey80", size=0.5, linetype="solid")) 
   

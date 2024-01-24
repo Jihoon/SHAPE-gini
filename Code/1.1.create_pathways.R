@@ -133,7 +133,6 @@ plot_povline <- function(traj, yr.end.figure = 2070) {
       data = . %>% filter(Year == 2060) %>% distinct(country, .keep_all = T),
       aes(x = 2060, y = povline.trend.tgt, label = iso3c),
       segment.color = 'grey80',
-      # nudge_x = 100,
       fontface = "bold",
       direction = "both",
       min.segment.length = 0.1,

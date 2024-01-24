@@ -46,7 +46,7 @@ gni2020 = WDI(indicator =c("NY.GNP.PCAP.CD", # GNI per capita, Atlas method (cur
   mutate(inc.grp = cut(gni.atlas, breaks=thres, labels=FALSE)) %>% # Numeric poverty lines
   group_by(inc.grp) %>%
   mutate(min = min(gni.atlas), med = median(gni.atlas), max = max(gni.atlas)) %>%  # min/med/max of the GNI within each group
-  mutate(grp.lower = pmax(inc.grp-1, 1)) %>% # The group below
+  # mutate(grp.lower = pmax(inc.grp-1, 1)) %>% # The group below
   mutate(gdp.gni.ratio = NY.GDP.PCAP.PP.KD/gni.atlas) # Between 2017 PPP$ and current Atlas
 
 # Gini WDI avg of years since 2015
@@ -56,6 +56,13 @@ gini.wb = WDI(indicator="SI.POV.GINI", start = 2015, extra=TRUE) %>%
   summarise(gini.baseyr = mean(SI.POV.GINI, na.rm = TRUE)) %>%
   drop_na()
 
+# Assign countries into WB income groups
+cty.grp <-
+  gni2020 %>% select(iso3c, inc.grp) %>% mutate(inc.grp = factor(
+    inc.grp,
+    levels = c(1, 2, 3, 4),
+    labels = c("LIC", "LMIC", "UMIC", "HIC")
+  ))
 
 ### SSP pop/GDP data import ==== 
 df.ssp = read.csv("P:/ene.general/DecentLivingEnergy/DLE_scaleup/Data/gdp_gini_pop_ssp.csv") %>%
@@ -205,10 +212,28 @@ df_pov %>% filter(grepl("Low & middle income", country)) %>%
   mutate(transfer = SI.POV.GAPS/100*SP.POP.TOTL*2.15*365/1e9)
 
 # Retrieve pov ratio at NPL
-df_povhc = WDI(indicator = "SI.POV.NAHC",  # Poverty headcount ratio at national poverty lines (% of population)
-               latest=3, extra=TRUE) 
-df_povhc = df_povhc %>%
+df_povhc_raw = WDI(indicator = "SI.POV.NAHC",  # Poverty headcount ratio at national poverty lines (% of population)
+               latest=3, extra=TRUE) %>%
+  select(country, iso3c, year, SI.POV.NAHC)
+write_csv(df_povhc_raw %>% left_join(cty.grp), "povhc_rate.csv")
+df_povhc = df_povhc_raw %>%
   group_by(country, iso3c) %>%
   summarise(povratio = mean(SI.POV.NAHC), years=max(year)-min(year), diff=max(SI.POV.NAHC)-min(SI.POV.NAHC)) %>% 
-  ungroup() 
-  
+  ungroup() %>%
+  left_join(cty.grp)
+
+mean((df_povhc %>% filter(inc.grp!="HIC"))$povratio) # Mean is around 30%
+p_povhc = ggplot(df_povhc_raw %>% left_join(cty.grp) %>% filter(!is.na(inc.grp)) %>% rename("Income group"=inc.grp),
+       aes(x=year, y=SI.POV.NAHC)) +
+  geom_line(aes(group=iso3c), color="grey", alpha=0.5) +
+  geom_jitter(aes(shape=`Income group`, colour=`Income group`)) +
+  labs(y="Poverty headcount ratio at national poverty lines (%)", colour="Income group") +
+  scale_color_brewer(palette="Paired") +theme_bw()
+ggsave(
+  plot = p_povhc,
+  filename = paste0(figure.path, "poverty headcount.png"),
+  width = 20,
+  height = 15,
+  dpi = 300,
+  units = "cm"
+)
