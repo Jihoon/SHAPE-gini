@@ -29,6 +29,14 @@ thres = c(b = 0, l = 1085, m = 4255, h = 13205, Inf) # GNI breaks for group clas
 povline = c(LIC = 2.15, LMIC = 3.65, UMIC = 6.85, HIC = 24) # HIC arbitrary (it is not included in the latest release) PPP2017
 pov.lowest = as.numeric(povline["LIC"])
 
+
+#### Tackle missing countries ####
+missing = c("CUB", "CZE", "DJI", "ERI", 
+            "NCL", "PYF", "ROU", "SOM", 
+            "SYR", "TWN", "VEN", "YEM")
+
+
+
 # Set up 2020 base year GNI/GDP data from WDI
 gni2020 = WDI(indicator =c("NY.GNP.PCAP.CD", # GNI per capita, Atlas method (current US$)
                            # "NY.GNP.PCAP.KD", # GNI per capita, PPP (constant 2017 international $)
@@ -49,12 +57,19 @@ gni2020 = WDI(indicator =c("NY.GNP.PCAP.CD", # GNI per capita, Atlas method (cur
   # mutate(grp.lower = pmax(inc.grp-1, 1)) %>% # The group below
   mutate(gdp.gni.ratio = NY.GDP.PCAP.PP.KD/gni.atlas) # Between 2017 PPP$ and current Atlas
 
+### log: tracking missing countries
+write_csv(gni2020 %>% filter(iso3c %in% missing), "./Data/debug/test1.csv")
+
 # Gini WDI avg of years since 2015
 gini.wb = WDI(indicator="SI.POV.GINI", start = 2015, extra=TRUE) %>% 
   filter(iso3c %in% iso3) %>% arrange(iso3c, year) %>% 
   group_by(country, iso3c) %>%
   summarise(gini.baseyr = mean(SI.POV.GINI, na.rm = TRUE))# %>%
   # drop_na()
+
+### log: tracking missing countries 
+write_csv(gini.wb %>% filter(iso3c %in% missing), "./Data/debug/test2.csv")
+
 
 # Assign countries into WB income groups
 cty.grp <-
@@ -77,6 +92,9 @@ gini.ssp = df.ssp %>%
   mutate(gini.baseyr = coalesce(gini.baseyr, gini.baseyr.imp)) %>%
   select(-c(country, gini.baseyr.imp)) %>%
   drop_na()
+
+### log: gini.ssp missing countries 
+write_csv(gini.wb %>% filter(iso3c %in% missing), "./Data/debug/test2.csv")
 
 
 ### SDP pop/GDP data import ==== 
@@ -115,6 +133,9 @@ reg.MSG = read_xlsx("P:/ene.general/DecentLivingEnergy/DLE_scaleup/Data/iso_regi
   rename(reg.MSG = "MESSAGE-GLOBIOM") %>% mutate(iso3c = toupper(iso3c)) %>% 
   select(iso3c, reg.MSG)
 
+### log: tracking missing countries 
+write_csv(reg.MSG %>% filter(iso3c %in% missing), "./Data/debug/test3.csv")
+
 # Get median Gini for each one of R11
 gini.MSG.median = reg.MSG %>%
   left_join(gini.ssp) %>% drop_na() %>%
@@ -126,6 +147,10 @@ gini.ssp = reg.MSG %>% left_join(gini.ssp) %>% left_join(gini.MSG.median) %>%
   mutate(gini.baseyr = coalesce(gini.baseyr, gini.median)) %>%
   select(-gini.median)
 
+### log: tracking missing countries 
+write_csv(gini.ssp %>% filter(iso3c %in% missing), "./Data/debug/test3.csv")
+
+
 # GDP conversion between 2005$ PPP and 2017$ PPP
 # (necessary since PIK GDP is in 2005$ PPP)
 ppp.conv = WDI(indicator = c("PA.NUS.PPP", "NY.GDP.DEFL.ZS"), start = 2005, end=2017, extra=TRUE) %>%
@@ -134,6 +159,11 @@ ppp.conv = WDI(indicator = c("PA.NUS.PPP", "NY.GDP.DEFL.ZS"), start = 2005, end=
   mutate(ppp.2005.to.2017 = PA.NUS.PPP_2005*NY.GDP.DEFL.ZS_2017/NY.GDP.DEFL.ZS_2005/PA.NUS.PPP_2017) %>%
   mutate(ppp.2017.to.2011 = PA.NUS.PPP_2017*NY.GDP.DEFL.ZS_2011/NY.GDP.DEFL.ZS_2017/PA.NUS.PPP_2011) %>%
   select(iso3c, ppp.2005.to.2017, ppp.2017.to.2011)
+
+### log: tracking missing countries 
+write_csv(ppp.conv %>% filter(iso3c %in% missing), "./Data/debug/test4.csv")
+
+
 
 # Households and NPISHs final consumption expenditure (% of GDP)
 # Get the latest non-NA value, based on the assumption that it's not varying fast.
@@ -144,6 +174,10 @@ fin.con = WDI(indicator ="NE.CON.PRVT.ZS", latest=1, extra=TRUE) %>%
   select(-c(capital:latitude, lending, iso2c)) %>% arrange(iso3c, -year) %>%
   select(iso3c, final.cons.rate)
 
+### log: tracking missing countries 
+write_csv(fin.con %>% filter(iso3c %in% missing), "./Data/debug/test5.csv")
+
+
 fin.con.median = fin.con %>% right_join(reg.MSG) %>% drop_na() %>%
   group_by(reg.MSG) %>% summarise(final.cons.MSG.median = median(final.cons.rate))
   
@@ -151,6 +185,10 @@ fin.con = reg.MSG %>% left_join(fin.con) %>% left_join(fin.con.median) %>%
   mutate(imputed.fin.con.r = is.na(final.cons.rate)) %>%
   mutate(final.cons.rate = coalesce(final.cons.rate, final.cons.MSG.median)) %>%
   select(-final.cons.MSG.median)
+
+### log: tracking missing countries 
+write_csv(fin.con %>% filter(iso3c %in% missing), "./Data/debug/test6.csv")
+
 
 # Passthrough rate taken from Lakner et al. 2019
 passthrough = 0.85

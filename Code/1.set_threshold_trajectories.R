@@ -74,6 +74,10 @@ master = gni2020 %>% left_join(fin.con) %>%
   # mutate(grp.lower = pmax(inc.grp - 1, 1)) %>% # The group below
   group_by(country) %>% drop_na(gdp.pcap)
 
+### log: tracking missing countries 
+write_csv(master %>% filter(iso3c %in% missing), "./Data/debug/test7.csv")
+
+
 
 # Exclude Kiribati from the analysis
 # Note: It has very low mean hh consumption (below povline) at the base year, 
