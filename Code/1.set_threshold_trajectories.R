@@ -286,7 +286,6 @@ p_npl = list()
 
 # Two country examples ====
 for (cty in c("LBY", "KGZ")) {
-# for (cty in c("AFG")) {
   
   df.cty = realised_gini %>% filter(iso3c %in% c(cty)) %>%
     mutate(Family = ifelse(grepl("SSP", Scenario), "SSP", "SDP"))
@@ -308,7 +307,7 @@ for (cty in c("LBY", "KGZ")) {
       data = realised_gini %>%
         filter(Year == 2020, iso3c %in% c(cty), Scenario == "SDP-EI"), 
       aes(yintercept = hh.exp.pcap.avg.day))  +
-    scale_y_continuous(limits = c(2, 20)) +
+    scale_y_continuous(limits = c(2, 25)) +
     theme(plot.margin = margin(1, 0,0,0, "cm")) +
     labs(y = "Poverty lines ($/day)") + 
     scale_linetype_manual(values = c("solid", "twodash")) +
@@ -341,19 +340,19 @@ for (cty in c("LBY", "KGZ")) {
     # labs(title = cty) +
     theme(plot.margin = margin(1, 0,0,0, "cm")) +
     annotate(geom = "text",
-             x = 2080,
-             y = 20,
-             label = "required for poverty eradication") +
+             x = 2050,
+             y = ifelse(cty=="LBY", 15 ,20),
+             label = "Required for poverty eradication") +
     annotate(geom = "text",
              x = 2070,
              y = 28,
-             label = "empirical lower bounds")
+             label = "Empirical lower bounds")
 }
 
 ggarrange(p_gini[[1]] + rremove("legend") + rremove("x.text"), p_gini[[2]] + rremove("x.text"), 
           p_npl[[1]] + rremove("legend"), p_npl[[2]],
-          labels = c("a) Libya (UMIC): Gini", "b) Kirgizstan (LMIC): Gini", 
-                     "c) Libya (UMIC): Poverty line", "d) Kirgizstan (LMIC): Poverty line"),
+          labels = c("a) Libya (UMIC): Gini", "b) Kyrgyzstan (LMIC): Gini", 
+                     "c) Libya (UMIC): Poverty line", "d) Kyrgyzstan (LMIC): Poverty line"),
           hjust = 0, vjust=1,
           ncol = 2, nrow = 2, 
           common.legend=TRUE, legend="right")
@@ -517,5 +516,5 @@ df.export = realised_gini %>%
     `Absolute target achieved` = tgt.achieved,-gini.baseyr
   )
 
-# write_delim(df.export, file="SHAPE_Gini_v1p0.csv", delim=',') # for >=5 year spells
-write_delim(df.export, file = "SHAPE_Gini_v1p3_annual.csv", delim = ',') # for >=10 year spells
+write_delim(df.export, file = "SHAPE_Gini_v1p4_annual.csv", delim = ',') # for >=10 year spells
+

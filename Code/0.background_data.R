@@ -36,9 +36,9 @@ gni2020 = WDI(indicator =c("NY.GNP.PCAP.CD", # GNI per capita, Atlas method (cur
                            "NY.GDP.PCAP.PP.CD", # GDP per capita, PPP (current international $)
                            "NY.GDP.PCAP.PP.KD", # GDP per capita, PPP (constant 2017 international $)
                            "NY.GDP.MKTP.PP.KD"  # GDP, PPP (constant 2017 international $)
-                           ), start = 2010, end=2020, extra=TRUE) %>% 
+                           ), start = 2010, end=2023, extra=TRUE) %>% 
   rename(gni.atlas = NY.GNP.PCAP.CD) %>%
-  filter(!is.na(iso3c), region!="Aggregates", year %in% c(2019, 2020), !is.na(gni.atlas)) %>%  # some countries without 2020 GNI
+  filter(!is.na(iso3c), iso3c!="", year %in% c(2018, 2021), !is.na(gni.atlas)) %>%  # some countries without 2020 GNI
   select(-c(capital:latitude, lending, iso2c)) %>% arrange(iso3c, -year) %>%
   group_by(country, iso3c) %>%
   summarise(across(gni.atlas:NY.GDP.MKTP.PP.KD, mean)) %>% ungroup() %>%
@@ -53,8 +53,8 @@ gni2020 = WDI(indicator =c("NY.GNP.PCAP.CD", # GNI per capita, Atlas method (cur
 gini.wb = WDI(indicator="SI.POV.GINI", start = 2015, extra=TRUE) %>% 
   filter(iso3c %in% iso3) %>% arrange(iso3c, year) %>% 
   group_by(country, iso3c) %>%
-  summarise(gini.baseyr = mean(SI.POV.GINI, na.rm = TRUE)) %>%
-  drop_na()
+  summarise(gini.baseyr = mean(SI.POV.GINI, na.rm = TRUE))# %>%
+  # drop_na()
 
 # Assign countries into WB income groups
 cty.grp <-
@@ -75,7 +75,8 @@ gini.ssp = df.ssp %>%
   select(iso3c, gini.baseyr=gini) %>%
   full_join(gini.wb %>% rename(gini.baseyr.imp = gini.baseyr)) %>%
   mutate(gini.baseyr = coalesce(gini.baseyr, gini.baseyr.imp)) %>%
-  select(-c(country, gini.baseyr.imp))
+  select(-c(country, gini.baseyr.imp)) %>%
+  drop_na()
 
 
 ### SDP pop/GDP data import ==== 
@@ -108,8 +109,10 @@ pop_data = read_delim(paste0(data.path, "release_v1p2_update/SHAPE_POP_v1p2_with
 
 
 # MESSAGE region definitions (R-11)
+# This incorrectly has ROM for ROU (Romania).
 reg.MSG = read_xlsx("P:/ene.general/DecentLivingEnergy/DLE_scaleup/Data/iso_region_MESSAGE.xlsx") %>% 
-  rename(iso3c = iso, reg.MSG = "MESSAGE-GLOBIOM") %>% mutate(iso3c = toupper(iso3c)) %>%
+  mutate(iso3c = ifelse(iso=="rom", "rou", iso)) %>%
+  rename(reg.MSG = "MESSAGE-GLOBIOM") %>% mutate(iso3c = toupper(iso3c)) %>% 
   select(iso3c, reg.MSG)
 
 # Get median Gini for each one of R11
