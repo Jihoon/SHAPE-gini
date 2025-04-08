@@ -17,6 +17,12 @@ iso3 = setdiff(countrycode::codelist$iso3c, NA)
 
 # Basic setup
 # ssp = "SSP1"
+
+
+### !! Important: As of Sep 5, I find the WDI data are updated and different from what I've generated for ERL. 
+### Especially, GDP PPP (NY.GDP.PCAP.PP.KD) is now 2021$ differently from 2017$ I had before.
+### This increases "hh.exp.pcap.avg" and results in sooner achievements for many countries. (reducing transfer requirements)
+
 run_mode = "SDP"  #"SSP"
 
 # WB thresholds per Country group (2020)
